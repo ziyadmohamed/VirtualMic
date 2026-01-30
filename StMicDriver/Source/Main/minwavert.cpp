@@ -17,6 +17,7 @@ Abstract:
 #include <limits.h>
 #include "endpoints.h"
 #include "minwavert.h"
+#include "SidebandData.h"
 #include "minwavertstream.h"
 #include "minwavert.h"
 #include "minwavertstream.h"

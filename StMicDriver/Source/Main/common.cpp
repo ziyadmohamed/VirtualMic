@@ -19,6 +19,7 @@ Abstract:
 #include "hw.h"
 #include "savedata.h"
 #include "endpoints.h"
+#include "SidebandData.h"
 
 // Global SidebandData instance
 SidebandData g_SidebandData;
