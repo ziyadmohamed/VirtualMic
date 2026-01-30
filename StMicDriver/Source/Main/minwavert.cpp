@@ -393,7 +393,7 @@ Return Value:
         }
 
         // Init Sideband Data for Mic
-        SidebandData::GetInstance().Init(48000 * 4); // 48kHz * 4 bytes/sample * 1 sec (approx)
+        g_SidebandData.Init(48000 * 4); // 48kHz * 4 bytes/sample * 1 sec (approx)
             
         // System streams.
         size = sizeof(PCMiniportWaveRTStream) * m_ulMaxSystemStreams;
