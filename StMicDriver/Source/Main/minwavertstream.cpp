@@ -1417,7 +1417,6 @@ ByteDisplacement - # of bytes to process.
         
         // Read from our sideband buffer (injected audio)
         g_SidebandData.Read(m_pDmaBuffer + bufferOffset, runWrite);
-        SidebandData::GetInstance().Read(m_pDmaBuffer + bufferOffset, runWrite);
            	
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;

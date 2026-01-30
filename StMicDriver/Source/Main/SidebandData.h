@@ -18,7 +18,7 @@ public:
 
     void Init(ULONG size) {
         if (!m_Buffer) {
-            m_Buffer = (BYTE*)ExAllocatePool2(POOL_FLAG_NON_PAGED, size, 'CISB');
+            m_Buffer = (BYTE*)ExAllocatePoolWithTag(NonPagedPoolNx, size, 'CISB');
             m_Size = size;
             m_ReadPtr = 0;
             m_WritePtr = 0;
