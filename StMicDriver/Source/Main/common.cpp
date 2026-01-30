@@ -15,6 +15,7 @@ Abstract:
 
 #include <initguid.h>
 #include "definitions.h"
+#include "StMicCommon.h"
 #include "hw.h"
 #include "savedata.h"
 #include "endpoints.h"
