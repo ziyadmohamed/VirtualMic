@@ -26,6 +26,14 @@ public:
         }
     }
 
+    void Free() {
+        if (m_Buffer) {
+            ExFreePoolWithTag(m_Buffer, 'CISB');
+            m_Buffer = NULL;
+            m_Size = 0;
+        }
+    }
+
     void Write(BYTE* data, ULONG length) {
         if (!m_Buffer) return;
         

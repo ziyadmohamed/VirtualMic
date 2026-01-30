@@ -473,6 +473,11 @@ Return Value:
     
     *OutStream = NULL;
 
+    if (Pin >= m_pMiniportPair->WaveDescriptor->PinCount)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
      //
     // If the data format attributes were specified, extract them.
     //

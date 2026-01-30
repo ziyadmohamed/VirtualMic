@@ -2121,6 +2121,7 @@ CAdapterCommon::Cleanup()
     PAGED_CODE();
     DPF_ENTER(("[CAdapterCommon::Cleanup]"));
     EmptySubdeviceCache();
+    g_SidebandData.Free();
 }
 
 //=============================================================================
