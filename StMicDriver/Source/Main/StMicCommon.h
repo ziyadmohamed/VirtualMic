@@ -1,0 +1,18 @@
+#ifndef _STMIC_IOCTL_H_
+#define _STMIC_IOCTL_H_
+
+//
+// Property Set GUID
+// {12345678-1234-5678-1234-567812345678}
+//
+DEFINE_GUID(KSPROPERTY_SET_STMIC, 
+    0x12345678, 0x1234, 0x5678, 0x12, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78);
+
+#define KSPROPERTY_STMIC_PUSHAUDIO 1
+
+typedef struct _STMIC_AUDIO_DATA {
+    ULONG Size;
+    BYTE Data[1]; // Variable length
+} STMIC_AUDIO_DATA, *PSTMIC_AUDIO_DATA;
+
+#endif

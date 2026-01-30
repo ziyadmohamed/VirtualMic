@@ -1,0 +1,105 @@
+name: Build StMicDriver
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'StMicDriver/**'
+      - '.github/workflows/build-driver.yml'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v1.3
+      
+      - name: Setup NuGet
+        uses: nuget/setup-nuget@v1
+      
+      - name: Install Windows Driver Kit (WDK)
+        shell: powershell
+        run: |
+          Write-Host "Installing WDK..."
+          # Download WDK installer
+          $wdkUrl = "https://go.microsoft.com/fwlink/?linkid=2196230"
+          $wdkInstaller = "$env:TEMP\wdksetup.exe"
+          Invoke-WebRequest -Uri $wdkUrl -OutFile $wdkInstaller
+          
+          # Install WDK quietly
+          Start-Process -FilePath $wdkInstaller -ArgumentList "/quiet", "/norestart" -Wait
+          
+          Write-Host "WDK installation completed"
+      
+      - name: Restore NuGet packages
+        run: nuget restore StMicDriver/SimpleAudioSample.sln
+      
+      - name: Build Driver (Debug x64)
+        run: |
+          msbuild StMicDriver/SimpleAudioSample.sln /p:Configuration=Debug /p:Platform=x64 /m /v:minimal
+      
+      - name: Build Driver (Release x64)
+        run: |
+          msbuild StMicDriver/SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+      
+      - name: List build output
+        shell: powershell
+        run: |
+          Write-Host "Debug build output:"
+          Get-ChildItem -Path "StMicDriver/x64/Debug" -Recurse | Select-Object FullName
+          Write-Host "`nRelease build output:"
+          Get-ChildItem -Path "StMicDriver/x64/Release" -Recurse | Select-Object FullName
+      
+      - name: Upload Debug Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: StMicDriver-Debug-x64
+          path: |
+            StMicDriver/x64/Debug/package/**/*
+            StMicDriver/x64/Debug/**/*.sys
+            StMicDriver/x64/Debug/**/*.inf
+            StMicDriver/x64/Debug/**/*.cat
+          if-no-files-found: warn
+      
+      - name: Upload Release Build Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: StMicDriver-Release-x64
+          path: |
+            StMicDriver/x64/Release/package/**/*
+            StMicDriver/x64/Release/**/*.sys
+            StMicDriver/x64/Release/**/*.inf
+            StMicDriver/x64/Release/**/*.cat
+          if-no-files-found: warn
+      
+      - name: Create Release ZIP
+        if: success()
+        shell: powershell
+        run: |
+          # Create a clean release package
+          $releaseDir = "StMicDriver-Package"
+          New-Item -ItemType Directory -Force -Path $releaseDir
+          
+          # Copy driver files
+          if (Test-Path "StMicDriver/x64/Release/package") {
+            Copy-Item -Path "StMicDriver/x64/Release/package/*" -Destination $releaseDir -Recurse -Force
+          }
+          
+          # Create ZIP
+          Compress-Archive -Path "$releaseDir/*" -DestinationPath "StMicDriver-Release.zip" -Force
+          
+          Write-Host "Release package created: StMicDriver-Release.zip"
+      
+      - name: Upload Release ZIP
+        if: success()
+        uses: actions/upload-artifact@v3
+        with:
+          name: StMicDriver-Release-ZIP
+          path: StMicDriver-Release.zip
