@@ -35,21 +35,19 @@ jobs:
           $kits = "${env:ProgramFiles(x86)}\Windows Kits\10"
           $includeRoot = Join-Path $kits "Include"
           $libRoot = Join-Path $kits "Lib"
-          $includeVersions = Get-ChildItem $includeRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' }
-          $libVersions = Get-ChildItem $libRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' }
-          $versions = $includeVersions.Name | Where-Object { $libVersions.Name -contains $_ } | Sort-Object -Descending
-          if (!$versions -or $versions.Count -eq 0) {
-            Write-Error "No Windows SDK versions found under $includeRoot and $libRoot"
-            exit 1
-          }
+          $preferred = "10.0.19041.0"
           $ver = $null
-          foreach ($v in $versions) {
-            $name = $v
-            $portcls = Join-Path $kits "Include\$name\km\portcls.h"
-            $lib = Join-Path $kits "Lib\$name\km\x64\BufferOverflowFastFailK.lib"
-            if ((Test-Path $portcls) -and (Test-Path $lib)) {
-              $ver = $name
-              break
+          if (Test-Path (Join-Path $libRoot $preferred)) { $ver = $preferred }
+          if (!$ver) {
+            $versions = Get-ChildItem $libRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | Sort-Object Name -Descending
+            foreach ($v in $versions) {
+              $name = $v.Name
+              $portcls = Join-Path $kits "Include\$name\km\portcls.h"
+              $lib = Join-Path $kits "Lib\$name\km\x64\BufferOverflowFastFailK.lib"
+              if ((Test-Path $portcls) -and (Test-Path $lib)) {
+                $ver = $name
+                break
+              }
             }
           }
           if (!$ver) {
@@ -76,8 +74,7 @@ jobs:
         run: |
           cd StMicDriver
           Write-Host "Building StMicDriver..."
-          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsSdkDir="$env:WindowsSdkDir" /p:RunInfVerif=false /v:minimal /m
-        continue-on-error: true
+          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:SDK_VERSION /p:WindowsSDKVersion="$env:SDK_VERSION\" /p:WindowsSdkDir="$env:WindowsSdkDir" /p:RunInfVerif=false /v:minimal /m
       
       - name: Check Build Output
         shell: powershell
