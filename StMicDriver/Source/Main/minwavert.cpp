@@ -1642,7 +1642,7 @@ Return Value:
                        PSTMIC_AUDIO_DATA pData = (PSTMIC_AUDIO_DATA)PropertyRequest->Value;
                        // Validation
                        if (PropertyRequest->ValueSize >= sizeof(ULONG) + pData->Size) {
-                           SidebandData::GetInstance().Write(pData->Data, pData->Size);
+                           g_SidebandData.Write(pData->Data, pData->Size);
                            ntStatus = STATUS_SUCCESS;
                        } else {
                            ntStatus = STATUS_BUFFER_TOO_SMALL;
@@ -1665,7 +1665,7 @@ Return Value:
               if (PropertyRequest->ValueSize >= sizeof(STMIC_AUDIO_DATA)) {
                    PSTMIC_AUDIO_DATA pData = (PSTMIC_AUDIO_DATA)PropertyRequest->Value;
                    if (PropertyRequest->ValueSize >= sizeof(ULONG) + pData->Size) {
-                       SidebandData::GetInstance().Write(pData->Data, pData->Size);
+                       g_SidebandData.Write(pData->Data, pData->Size);
                        ntStatus = STATUS_SUCCESS;
                    }
                }
