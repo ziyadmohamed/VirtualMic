@@ -347,8 +347,7 @@ Return Value:
     // Validate node
     // This property is only valid for WAVEIN_MUX node.
     //
-    //
-    if (WAVEIN_MUX == PropertyRequest->Node)
+    // TODO if (WAVEIN_MUX == PropertyRequest->Node)
     {
         if (PropertyRequest->ValueSize >= sizeof(ULONG))
         {

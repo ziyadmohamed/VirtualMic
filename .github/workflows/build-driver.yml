@@ -43,7 +43,7 @@ jobs:
         run: |
           cd StMicDriver
           Write-Host "Building StMicDriver..."
-          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /v:minimal /m
+          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.19041.0 /v:minimal /m
         continue-on-error: true
       
       - name: Check Build Output
