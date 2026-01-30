@@ -48,11 +48,8 @@ jobs:
         shell: powershell
         run: |
           Write-Host "Checking build output..."
-          if (Test-Path "StMicDriver/x64/Release") {
-            Get-ChildItem -Path "StMicDriver/x64/Release" -Recurse | Select-Object FullName, Length
-          } else {
-            Write-Host "Build output directory not found"
-          }
+          Write-Host "Searching for build artifacts..."
+          Get-ChildItem -Path . -Recurse -Include *.sys,*.inf,*.cat | Select-Object FullName, Length
       
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
@@ -60,5 +57,9 @@ jobs:
         with:
           name: StMicDriver-Output
           path: |
-            StMicDriver/x64/**/*
+            **/*.sys
+            **/*.inf
+            **/*.cat
+            **/*.cer
+            **/package/**/*
           if-no-files-found: warn
