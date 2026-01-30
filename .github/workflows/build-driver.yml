@@ -21,14 +21,35 @@ jobs:
       - name: Setup NuGet
         uses: nuget/setup-nuget@v1
         
-      - name: Install WDK using Chocolatey
+      - name: Install SDK/WDK using Chocolatey
         shell: powershell
         run: |
-          Write-Host "Installing WDK via Chocolatey..."
+          Write-Host "Installing SDK/WDK via Chocolatey..."
           choco install windows-sdk-10-version-2004-all -y --no-progress
           choco install windowsdriverkit10 -y --no-progress --ignore-checksums
-          Write-Host "WDK installation completed"
-        continue-on-error: true
+          Write-Host "SDK/WDK installation completed"
+
+      - name: Resolve SDK/WDK paths
+        shell: powershell
+        run: |
+          $kits = "${env:ProgramFiles(x86)}\Windows Kits\10"
+          $includeRoot = Join-Path $kits "Include"
+          $versions = Get-ChildItem $includeRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | Sort-Object Name -Descending
+          if (!$versions -or $versions.Count -eq 0) {
+            Write-Error "No Windows SDK include versions found under $includeRoot"
+            exit 1
+          }
+          $ver = $versions[0].Name
+          $portcls = Join-Path $kits "Include\$ver\km\portcls.h"
+          if (!(Test-Path $portcls)) {
+            Write-Error "portcls.h not found at $portcls"
+            exit 1
+          }
+          "SDK_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "WindowsSdkDir=$kits\" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "DDK_INC_PATH=$kits\Include\$ver\km;$kits\Include\$ver\shared;$kits\Include\$ver\um" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "DDK_LIB_PATH=$kits\Lib\$ver\km\x64" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Using SDK/WDK version: $ver"
       
       - name: List MSBuild and check environment
         shell: powershell
@@ -43,7 +64,7 @@ jobs:
         run: |
           cd StMicDriver
           Write-Host "Building StMicDriver..."
-          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=10.0.19041.0 /v:minimal /m
+          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:SDK_VERSION /p:RunInfVerif=false /v:minimal /m
         continue-on-error: true
       
       - name: Check Build Output
