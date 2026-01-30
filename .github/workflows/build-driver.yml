@@ -34,14 +34,17 @@ jobs:
         run: |
           $kits = "${env:ProgramFiles(x86)}\Windows Kits\10"
           $includeRoot = Join-Path $kits "Include"
-          $versions = Get-ChildItem $includeRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | Sort-Object Name -Descending
+          $libRoot = Join-Path $kits "Lib"
+          $includeVersions = Get-ChildItem $includeRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' }
+          $libVersions = Get-ChildItem $libRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' }
+          $versions = $includeVersions.Name | Where-Object { $libVersions.Name -contains $_ } | Sort-Object -Descending
           if (!$versions -or $versions.Count -eq 0) {
-            Write-Error "No Windows SDK include versions found under $includeRoot"
+            Write-Error "No Windows SDK versions found under $includeRoot and $libRoot"
             exit 1
           }
           $ver = $null
           foreach ($v in $versions) {
-            $name = $v.Name
+            $name = $v
             $portcls = Join-Path $kits "Include\$name\km\portcls.h"
             $lib = Join-Path $kits "Lib\$name\km\x64\BufferOverflowFastFailK.lib"
             if ((Test-Path $portcls) -and (Test-Path $lib)) {
