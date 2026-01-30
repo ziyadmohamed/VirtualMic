@@ -13,10 +13,8 @@ private:
     KSPIN_LOCK m_Lock;
 
 public:
-    static SidebandData& GetInstance() {
-        static SidebandData instance;
-        return instance;
-    }
+    // Removed Singleton to avoid kernel static init issues
+    // Use global g_SidebandData
 
     void Init(ULONG size) {
         if (!m_Buffer) {
@@ -68,8 +66,11 @@ public:
         KeReleaseSpinLock(&m_Lock, oldIrql);
     }
     
-private:
+    // Constructor
     SidebandData() : m_Buffer(NULL), m_Size(0) {}
 };
+
+// Global instance declaration
+extern SidebandData g_SidebandData;
 
 #endif

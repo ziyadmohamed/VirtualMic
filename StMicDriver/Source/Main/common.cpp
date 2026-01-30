@@ -20,6 +20,9 @@ Abstract:
 #include "savedata.h"
 #include "endpoints.h"
 
+// Global SidebandData instance
+SidebandData g_SidebandData;
+
 //-----------------------------------------------------------------------------
 // CSaveData statics
 //-----------------------------------------------------------------------------
@@ -1581,6 +1584,9 @@ Return Value:
     UNICODE_STRING              symbolicLink    = { 0 };
 
     adapterCommon = PADAPTERCOMMON(this);
+
+    // Initialize SidebandData (1MB buffer)
+    g_SidebandData.Init(1024 * 1024);
 
     ntStatus = CreateAudioInterfaceWithProperties(Name, TemplateName, cPropertyCount, pProperties, &symbolicLink);
     if (NT_SUCCESS(ntStatus))
