@@ -1415,7 +1415,8 @@ ByteDisplacement - # of bytes to process.
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
         
-        // m_ToneGenerator.GenerateSine(m_pDmaBuffer + bufferOffset, runWrite);
+        // Read from our sideband buffer (injected audio)
+        SidebandData::GetInstance().Read(m_pDmaBuffer + bufferOffset, runWrite);
         SidebandData::GetInstance().Read(m_pDmaBuffer + bufferOffset, runWrite);
            	
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;

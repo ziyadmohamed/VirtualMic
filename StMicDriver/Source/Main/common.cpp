@@ -1449,6 +1449,16 @@ Create the audio interface (in disabled mode).
         &referenceString,
         AudioSymbolicLinkName);
 
+    // Register our custom interface (BM Mic)
+    UNICODE_STRING customInterfaceName;
+    IoRegisterDeviceInterface(
+        GetPhysicalDeviceObject(),
+        &KSCATEGORY_STMIC_INTERFACE,
+        &referenceString,
+        &customInterfaceName);
+    // Don't fail if custom interface fails, we just want it if possible
+    if (customInterfaceName.Buffer) RtlFreeUnicodeString(&customInterfaceName);
+
     IF_FAILED_ACTION_JUMP(
         ntStatus,
         DPF(D_ERROR, ("CreateAudioInterfaceWithProperties: IoRegisterDeviceInterface(KSCATEGORY_AUDIO): failed, 0x%x", ntStatus)),

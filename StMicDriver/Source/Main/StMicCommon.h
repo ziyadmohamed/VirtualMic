@@ -10,6 +10,13 @@ DEFINE_GUID(KSPROPERTY_SET_STMIC,
 
 #define KSPROPERTY_STMIC_PUSHAUDIO 1
 
+//
+// Device Interface GUID for StMicDriver (BM Mic)
+// {D58971B1-3AD2-4C90-9E11-3733A74A3600}
+//
+DEFINE_GUID(KSCATEGORY_STMIC_INTERFACE, 
+    0xd58971b1, 0x3ad2, 0x4c90, 0x9e, 0x11, 0x37, 0x33, 0xa7, 0x4a, 0x36, 0x00);
+
 typedef struct _STMIC_AUDIO_DATA {
     ULONG Size;
     BYTE Data[1]; // Variable length
