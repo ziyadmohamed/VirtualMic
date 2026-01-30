@@ -76,7 +76,7 @@ jobs:
         run: |
           cd StMicDriver
           Write-Host "Building StMicDriver..."
-          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:SDK_VERSION /p:WindowsSdkDir="$env:WindowsSdkDir" /p:RunInfVerif=false /v:minimal /m
+          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsSdkDir="$env:WindowsSdkDir" /p:RunInfVerif=false /v:minimal /m
         continue-on-error: true
       
       - name: Check Build Output
