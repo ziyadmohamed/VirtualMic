@@ -39,16 +39,27 @@ jobs:
             Write-Error "No Windows SDK include versions found under $includeRoot"
             exit 1
           }
-          $ver = $versions[0].Name
-          $portcls = Join-Path $kits "Include\$ver\km\portcls.h"
-          if (!(Test-Path $portcls)) {
-            Write-Error "portcls.h not found at $portcls"
+          $ver = $null
+          foreach ($v in $versions) {
+            $name = $v.Name
+            $portcls = Join-Path $kits "Include\$name\km\portcls.h"
+            $lib = Join-Path $kits "Lib\$name\km\x64\BufferOverflowFastFailK.lib"
+            $infverif = Join-Path $kits "bin\$name\x86\InfVerif.dll"
+            if ((Test-Path $portcls) -and (Test-Path $lib) -and (Test-Path $infverif)) {
+              $ver = $name
+              break
+            }
+          }
+          if (!$ver) {
+            Write-Error "No SDK/WDK version found with portcls.h, BufferOverflowFastFailK.lib, and InfVerif.dll"
             exit 1
           }
           "SDK_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append
           "WindowsSdkDir=$kits\" | Out-File -FilePath $env:GITHUB_ENV -Append
           "DDK_INC_PATH=$kits\Include\$ver\km;$kits\Include\$ver\shared;$kits\Include\$ver\um" | Out-File -FilePath $env:GITHUB_ENV -Append
           "DDK_LIB_PATH=$kits\Lib\$ver\km\x64" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "WindowsSDKVersion=$ver\" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "PATH=$kits\bin\$ver\x86;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "Using SDK/WDK version: $ver"
       
       - name: List MSBuild and check environment
@@ -64,7 +75,7 @@ jobs:
         run: |
           cd StMicDriver
           Write-Host "Building StMicDriver..."
-          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:SDK_VERSION /p:RunInfVerif=false /v:minimal /m
+          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:SDK_VERSION /p:WindowsSdkDir="$env:WindowsSdkDir" /p:RunInfVerif=false /v:minimal /m
         continue-on-error: true
       
       - name: Check Build Output
