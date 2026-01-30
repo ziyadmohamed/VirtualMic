@@ -44,14 +44,13 @@ jobs:
             $name = $v.Name
             $portcls = Join-Path $kits "Include\$name\km\portcls.h"
             $lib = Join-Path $kits "Lib\$name\km\x64\BufferOverflowFastFailK.lib"
-            $infverif = Join-Path $kits "bin\$name\x86\InfVerif.dll"
-            if ((Test-Path $portcls) -and (Test-Path $lib) -and (Test-Path $infverif)) {
+            if ((Test-Path $portcls) -and (Test-Path $lib)) {
               $ver = $name
               break
             }
           }
           if (!$ver) {
-            Write-Error "No SDK/WDK version found with portcls.h, BufferOverflowFastFailK.lib, and InfVerif.dll"
+            Write-Error "No SDK/WDK version found with portcls.h and BufferOverflowFastFailK.lib"
             exit 1
           }
           "SDK_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append
@@ -59,7 +58,6 @@ jobs:
           "DDK_INC_PATH=$kits\Include\$ver\km;$kits\Include\$ver\shared;$kits\Include\$ver\um" | Out-File -FilePath $env:GITHUB_ENV -Append
           "DDK_LIB_PATH=$kits\Lib\$ver\km\x64" | Out-File -FilePath $env:GITHUB_ENV -Append
           "WindowsSDKVersion=$ver\" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "PATH=$kits\bin\$ver\x86;$env:PATH" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "Using SDK/WDK version: $ver"
       
       - name: List MSBuild and check environment
