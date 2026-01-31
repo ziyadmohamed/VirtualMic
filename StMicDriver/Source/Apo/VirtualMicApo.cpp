@@ -1,5 +1,6 @@
 #include "VirtualMicApo.h"
 #include <new>
+#include <objbase.h>
 
 static LONG g_dllRef = 0;
 
@@ -21,19 +22,17 @@ STDMETHODIMP VirtualMicApo::QueryInterface(REFIID riid, void** ppv)
     if (!ppv) return E_POINTER;
     *ppv = nullptr;
 
-    if (riid == __uuidof(IUnknown) ||
-        riid == __uuidof(IAudioProcessingObject) ||
-        riid == __uuidof(IAudioProcessingObjectRT))
-    {
-        *ppv = static_cast<IAudioProcessingObjectRT*>(this);
-    }
-    else if (riid == __uuidof(IAudioProcessingObject))
+    if (riid == __uuidof(IUnknown) || riid == __uuidof(IAudioProcessingObject))
     {
         *ppv = static_cast<IAudioProcessingObject*>(this);
     }
     else if (riid == __uuidof(IAudioProcessingObjectRT))
     {
         *ppv = static_cast<IAudioProcessingObjectRT*>(this);
+    }
+    else if (riid == __uuidof(IAudioProcessingObjectConfiguration))
+    {
+        *ppv = static_cast<IAudioProcessingObjectConfiguration*>(this);
     }
 
     if (*ppv)
@@ -60,10 +59,53 @@ STDMETHODIMP_(ULONG) VirtualMicApo::Release()
     return ref;
 }
 
+STDMETHODIMP VirtualMicApo::Reset()
+{
+    return S_OK;
+}
+
 STDMETHODIMP VirtualMicApo::GetLatency(HNSTIME* pLatency)
 {
     if (!pLatency) return E_POINTER;
     *pLatency = 0;
+    return S_OK;
+}
+
+STDMETHODIMP VirtualMicApo::GetRegistrationProperties(APO_REG_PROPERTIES** ppRegProps)
+{
+    if (!ppRegProps) return E_POINTER;
+
+    const IID iids[] = {
+        IID_IAudioProcessingObject,
+        IID_IAudioProcessingObjectRT,
+        IID_IAudioProcessingObjectConfiguration
+    };
+
+    const UINT32 numIids = (UINT32)(sizeof(iids) / sizeof(iids[0]));
+    const size_t propSize = sizeof(APO_REG_PROPERTIES) + ((numIids - 1) * sizeof(IID));
+    APO_REG_PROPERTIES* props = (APO_REG_PROPERTIES*)CoTaskMemAlloc(propSize);
+    if (!props) return E_OUTOFMEMORY;
+
+    ZeroMemory(props, propSize);
+    props->clsid = CLSID_VirtualMicApo;
+    props->Flags = APO_FLAG_DEFAULT;
+    wcsncpy_s(props->szFriendlyName, L\"VirtualMic APO\", _TRUNCATE);
+    wcsncpy_s(props->szCopyrightInfo, L\"(c) VirtualMic\", _TRUNCATE);
+    props->u32MajorVersion = 1;
+    props->u32MinorVersion = 0;
+    props->u32MinInputConnections = 1;
+    props->u32MaxInputConnections = 1;
+    props->u32MinOutputConnections = 1;
+    props->u32MaxOutputConnections = 1;
+    props->u32MaxInstances = 0; // unlimited
+    props->u32NumAPOInterfaces = numIids;
+
+    for (UINT32 i = 0; i < numIids; ++i)
+    {
+        props->iidAPOInterfaceList[i] = iids[i];
+    }
+
+    *ppRegProps = props;
     return S_OK;
 }
 
@@ -91,13 +133,6 @@ STDMETHODIMP VirtualMicApo::IsOutputFormatSupported(IAudioMediaType* /*pInputFor
 }
 
 STDMETHODIMP VirtualMicApo::GetInputChannelCount(UINT32* pChannelCount)
-{
-    if (!pChannelCount) return E_POINTER;
-    *pChannelCount = m_channels;
-    return S_OK;
-}
-
-STDMETHODIMP VirtualMicApo::GetOutputChannelCount(UINT32* pChannelCount)
 {
     if (!pChannelCount) return E_POINTER;
     *pChannelCount = m_channels;
