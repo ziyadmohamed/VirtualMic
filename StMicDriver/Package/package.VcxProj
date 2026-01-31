@@ -101,15 +101,18 @@
     <PropertyGroup>
       <InfDir Condition="'$(PathToInf)' != ''">$([System.IO.Path]::GetDirectoryName('$(PathToInf)'))</InfDir>
       <InfDir Condition="'$(InfDir)' == ''">$(ProjectDir)</InfDir>
+      <PackageDir>$(OutDir)package\</PackageDir>
     </PropertyGroup>
     <ItemGroup>
       <ApoSource Include="..\Source\Main\$(Platform)\$(Configuration)\VirtualMicApo.dll" />
     </ItemGroup>
     <Message Text="PathToInf=$(PathToInf) InfDir=$(InfDir)" Importance="high" />
+    <Message Text="PackageDir=$(PackageDir)" Importance="high" />
     <Message Text="Staging VirtualMicApo.dll from %(ApoSource.FullPath)" Importance="high" Condition="Exists('%(ApoSource.FullPath)')" />
-    <MakeDir Directories="$(InfDir);$(ProjectDir)$(Platform)\$(Configuration)" />
+    <MakeDir Directories="$(InfDir);$(ProjectDir)$(Platform)\$(Configuration);$(PackageDir)" />
     <Copy SourceFiles="@(ApoSource)" DestinationFolder="$(InfDir)" SkipUnchangedFiles="true" Condition="Exists('%(ApoSource.FullPath)')" />
     <Copy SourceFiles="@(ApoSource)" DestinationFolder="$(ProjectDir)$(Platform)\$(Configuration)" SkipUnchangedFiles="true" Condition="Exists('%(ApoSource.FullPath)')" />
+    <Copy SourceFiles="@(ApoSource)" DestinationFolder="$(PackageDir)" SkipUnchangedFiles="true" Condition="Exists('%(ApoSource.FullPath)')" />
   </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
