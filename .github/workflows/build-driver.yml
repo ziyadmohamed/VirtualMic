@@ -62,7 +62,7 @@ jobs:
           "SDK_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append
           "WindowsSdkDir=$kits\" | Out-File -FilePath $env:GITHUB_ENV -Append
           "DDK_INC_PATH=$kits\Include\$ver\km;$kits\Include\$ver\shared;$kits\Include\$ver\um" | Out-File -FilePath $env:GITHUB_ENV -Append
-          "DDK_LIB_PATH=$kits\Lib\$ver\km\x64" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "DDK_LIB_PATH=$kits\Lib\$ver\km\x64\" | Out-File -FilePath $env:GITHUB_ENV -Append
           "WindowsSDKVersion=$ver\" | Out-File -FilePath $env:GITHUB_ENV -Append
           Write-Host "Using SDK/WDK version: $ver"
       
@@ -81,7 +81,7 @@ jobs:
         run: |
           cd StMicDriver
           Write-Host "Building StMicDriver..."
-          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:SDK_VERSION /p:WindowsSDKVersion="$env:SDK_VERSION\" /p:WindowsSdkDir="$env:WindowsSdkDir" /p:RunInfVerif=false /v:minimal /m
+          msbuild SimpleAudioSample.sln /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:SDK_VERSION /p:WindowsSDKVersion="$env:SDK_VERSION\" /p:WindowsSdkDir="$env:WindowsSdkDir" /p:RunInfVerif=false /p:DisableInfVerif=true /p:InfVerif=false /p:EnableInfVerif=false /v:minimal /m
       
       - name: Check Build Output
         shell: powershell
