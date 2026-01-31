@@ -99,7 +99,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <Target Name="StageApoForPackage" BeforeTargets="Inf2Cat">
     <PropertyGroup>
-      <InfDir>$([System.IO.Path]::GetDirectoryName('$(PathToInf)'))</InfDir>
+      <InfDir Condition="'$(PathToInf)' != ''">$([System.IO.Path]::GetDirectoryName('$(PathToInf)'))</InfDir>
       <InfDir Condition="'$(InfDir)' == ''">$(ProjectDir)</InfDir>
     </PropertyGroup>
     <ItemGroup>
