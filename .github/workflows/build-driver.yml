@@ -90,11 +90,12 @@ jobs:
           $dest = "StMicDriver\\Source\\Main\\x64\\Release"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
           $target = Join-Path $dest "VirtualMicApo.dll"
-          if ($apo.FullName -ne $target) {
+          $targetPath = (Resolve-Path $target -ErrorAction SilentlyContinue).Path
+          if ($targetPath -and ($apo.FullName -ieq $targetPath)) {
+            Write-Host "APO already staged at $targetPath"
+          } else {
             Copy-Item $apo.FullName -Destination $dest -Force
             Write-Host "Staged APO: $($apo.FullName) -> $dest"
-          } else {
-            Write-Host "APO already staged at $target"
           }
 
       - name: Build Driver
