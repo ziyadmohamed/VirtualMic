@@ -97,6 +97,13 @@
     </DriverSign>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Target Name="BeforeBuild">
+    <ItemGroup>
+      <ApoSource Include="..\Source\Main\$(Platform)\$(Configuration)\VirtualMicApo.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ApoSource)" DestinationFolder="$(ProjectDir)" SkipUnchangedFiles="true" Condition="Exists('%(ApoSource.FullPath)')" />
+    <Copy SourceFiles="@(ApoSource)" DestinationFolder="$(ProjectDir)$(Platform)\$(Configuration)" SkipUnchangedFiles="true" Condition="Exists('%(ApoSource.FullPath)')" />
+  </Target>
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>
