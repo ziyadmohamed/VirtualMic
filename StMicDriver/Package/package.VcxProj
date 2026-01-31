@@ -97,10 +97,12 @@
     </DriverSign>
   </ItemDefinitionGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
-  <Target Name="BeforeBuild">
+  <Target Name="StageApoForPackage" BeforeTargets="Inf2Cat">
     <ItemGroup>
       <ApoSource Include="..\Source\Main\$(Platform)\$(Configuration)\VirtualMicApo.dll" />
     </ItemGroup>
+    <Message Text="Staging VirtualMicApo.dll from %(ApoSource.FullPath)" Importance="high" Condition="Exists('%(ApoSource.FullPath)')" />
+    <MakeDir Directories="$(ProjectDir);$(ProjectDir)$(Platform)\$(Configuration)" />
     <Copy SourceFiles="@(ApoSource)" DestinationFolder="$(ProjectDir)" SkipUnchangedFiles="true" Condition="Exists('%(ApoSource.FullPath)')" />
     <Copy SourceFiles="@(ApoSource)" DestinationFolder="$(ProjectDir)$(Platform)\$(Configuration)" SkipUnchangedFiles="true" Condition="Exists('%(ApoSource.FullPath)')" />
   </Target>
