@@ -1,0 +1,4 @@
+LIBRARY "VirtualMicApo"
+EXPORTS
+    DllGetClassObject
+    DllCanUnloadNow

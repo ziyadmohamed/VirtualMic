@@ -76,6 +76,12 @@ jobs:
           Write-Host "`nChecking Windows Kits roots..."
           Get-ChildItem "$env:ProgramFiles(x86)\Windows Kits\10" -ErrorAction SilentlyContinue | Select-Object -First 10
       
+      - name: Build APO
+        shell: powershell
+        run: |
+          Write-Host "Building VirtualMic APO..."
+          msbuild StMicDriver\Source\Apo\VirtualMicApo.vcxproj /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:SDK_VERSION /p:WindowsSDKVersion="$env:SDK_VERSION\" /p:WindowsSdkDir="$env:WindowsSdkDir" /v:minimal /m
+
       - name: Build Driver
         shell: powershell
         run: |
