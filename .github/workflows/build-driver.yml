@@ -32,27 +32,32 @@ jobs:
       - name: Resolve SDK/WDK paths
         shell: powershell
         run: |
-          $kits = "${env:ProgramFiles(x86)}\Windows Kits\10"
+          $kits = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows Kits\Installed Roots" -ErrorAction SilentlyContinue).KitsRoot10
+          if (!$kits) { $kits = "${env:ProgramFiles(x86)}\Windows Kits\10" }
           $includeRoot = Join-Path $kits "Include"
           $libRoot = Join-Path $kits "Lib"
-          $preferred = "10.0.19041.0"
+          Write-Host "SDK Include root: $includeRoot"
+          Write-Host "SDK Lib root: $libRoot"
+          if (!(Test-Path $includeRoot) -or !(Test-Path $libRoot)) {
+            throw "Windows SDK roots not found. Include: $includeRoot ; Lib: $libRoot"
+          }
+          $includeVersions = Get-ChildItem $includeRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -ExpandProperty Name
+          $libVersions = Get-ChildItem $libRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | Select-Object -ExpandProperty Name
+          $versions = $includeVersions | Where-Object { $libVersions -contains $_ } | Sort-Object -Descending
+          if (!$versions -or $versions.Count -eq 0) {
+            throw "No Windows SDK versions found under Include and Lib."
+          }
           $ver = $null
-          if (Test-Path (Join-Path $libRoot $preferred)) { $ver = $preferred }
-          if (!$ver) {
-            $versions = Get-ChildItem $libRoot -Directory | Where-Object { $_.Name -match '^\d+\.\d+\.\d+\.\d+$' } | Sort-Object Name -Descending
-            foreach ($v in $versions) {
-              $name = $v.Name
-              $portcls = Join-Path $kits "Include\$name\km\portcls.h"
-              $lib = Join-Path $kits "Lib\$name\km\x64\BufferOverflowFastFailK.lib"
-              if ((Test-Path $portcls) -and (Test-Path $lib)) {
-                $ver = $name
-                break
-              }
+          foreach ($name in $versions) {
+            $portcls = Join-Path $kits "Include\$name\km\portcls.h"
+            $lib = Join-Path $kits "Lib\$name\km\x64\BufferOverflowFastFailK.lib"
+            if ((Test-Path $portcls) -and (Test-Path $lib)) {
+              $ver = $name
+              break
             }
           }
           if (!$ver) {
-            Write-Error "No SDK/WDK version found with portcls.h and BufferOverflowFastFailK.lib"
-            exit 1
+            throw "No SDK/WDK version found with portcls.h and BufferOverflowFastFailK.lib"
           }
           "SDK_VERSION=$ver" | Out-File -FilePath $env:GITHUB_ENV -Append
           "WindowsSdkDir=$kits\" | Out-File -FilePath $env:GITHUB_ENV -Append
