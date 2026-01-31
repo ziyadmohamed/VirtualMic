@@ -89,8 +89,13 @@ jobs:
           if (-not $apo) { throw "VirtualMicApo.dll not found" }
           $dest = "StMicDriver\\Source\\Main\\x64\\Release"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
-          Copy-Item $apo.FullName -Destination $dest -Force
-          Write-Host "Staged APO: $($apo.FullName) -> $dest"
+          $target = Join-Path $dest "VirtualMicApo.dll"
+          if ($apo.FullName -ne $target) {
+            Copy-Item $apo.FullName -Destination $dest -Force
+            Write-Host "Staged APO: $($apo.FullName) -> $dest"
+          } else {
+            Write-Host "APO already staged at $target"
+          }
 
       - name: Build Driver
         shell: powershell
