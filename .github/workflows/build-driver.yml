@@ -81,6 +81,16 @@ jobs:
         run: |
           Write-Host "Building VirtualMic APO..."
           msbuild StMicDriver\Source\Apo\VirtualMicApo.vcxproj /p:Configuration=Release /p:Platform=x64 /p:WindowsTargetPlatformVersion=$env:SDK_VERSION /p:WindowsSDKVersion="$env:SDK_VERSION\" /p:WindowsSdkDir="$env:WindowsSdkDir" /v:minimal /m
+      
+      - name: Stage APO for driver package
+        shell: powershell
+        run: |
+          $apo = Get-ChildItem -Path StMicDriver -Recurse -Filter VirtualMicApo.dll | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+          if (-not $apo) { throw "VirtualMicApo.dll not found" }
+          $dest = "StMicDriver\\Source\\Main\\x64\\Release"
+          New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          Copy-Item $apo.FullName -Destination $dest -Force
+          Write-Host "Staged APO: $($apo.FullName) -> $dest"
 
       - name: Build Driver
         shell: powershell
