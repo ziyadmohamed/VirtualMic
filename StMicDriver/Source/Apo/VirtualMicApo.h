@@ -2,6 +2,7 @@
 
 #include <windows.h>
 #include <mmreg.h>
+#include <AudioAPOTypes.h>
 #include <audioenginebaseapo.h>
 
 // {A4B73D9A-7D0E-4E7B-9E4D-9D6D3C1A9B2F}

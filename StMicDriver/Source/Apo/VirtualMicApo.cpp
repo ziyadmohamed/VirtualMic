@@ -89,8 +89,8 @@ STDMETHODIMP VirtualMicApo::GetRegistrationProperties(APO_REG_PROPERTIES** ppReg
     ZeroMemory(props, propSize);
     props->clsid = CLSID_VirtualMicApo;
     props->Flags = APO_FLAG_DEFAULT;
-    wcsncpy_s(props->szFriendlyName, L\"VirtualMic APO\", _TRUNCATE);
-    wcsncpy_s(props->szCopyrightInfo, L\"(c) VirtualMic\", _TRUNCATE);
+    wcsncpy_s(props->szFriendlyName, L"VirtualMic APO", _TRUNCATE);
+    wcsncpy_s(props->szCopyrightInfo, L"(c) VirtualMic", _TRUNCATE);
     props->u32MajorVersion = 1;
     props->u32MinorVersion = 0;
     props->u32MinInputConnections = 1;
@@ -148,8 +148,8 @@ STDMETHODIMP VirtualMicApo::LockForProcess(UINT32 /*u32NumInputConnections*/,
     IAudioMediaType* fmt = ppOutputConnections[0]->pFormat;
     if (fmt)
     {
-        WAVEFORMATEX* wfx = nullptr;
-        if (SUCCEEDED(fmt->GetAudioFormat(&wfx)) && wfx)
+        const WAVEFORMATEX* wfx = fmt->GetAudioFormat();
+        if (wfx)
         {
             m_channels = wfx->nChannels;
             m_bytesPerFrame = wfx->nBlockAlign;
@@ -181,21 +181,23 @@ STDMETHODIMP_(void) VirtualMicApo::APOProcess(UINT32 u32NumInputConnections,
 
     UINT32 frames = outConn->u32ValidFrameCount;
     UINT32 bytes = frames * m_bytesPerFrame;
+    void* outBuf = reinterpret_cast<void*>(outConn->pBuffer);
 
     if (u32NumInputConnections == 0 || !ppInputConnections || !ppInputConnections[0] || !ppInputConnections[0]->pBuffer)
     {
-        memset(outConn->pBuffer, 0, bytes);
+        memset(outBuf, 0, bytes);
         return;
     }
 
     APO_CONNECTION_PROPERTY* inConn = ppInputConnections[0];
+    void* inBuf = reinterpret_cast<void*>(inConn->pBuffer);
     UINT32 inFrames = inConn->u32ValidFrameCount;
     UINT32 inBytes = inFrames * m_bytesPerFrame;
     UINT32 copyBytes = (inBytes < bytes) ? inBytes : bytes;
-    memcpy(outConn->pBuffer, inConn->pBuffer, copyBytes);
+    memcpy(outBuf, inBuf, copyBytes);
     if (copyBytes < bytes)
     {
-        memset(((BYTE*)outConn->pBuffer) + copyBytes, 0, bytes - copyBytes);
+        memset(((BYTE*)outBuf) + copyBytes, 0, bytes - copyBytes);
     }
 }
 
