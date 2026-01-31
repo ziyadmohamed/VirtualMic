@@ -88,7 +88,9 @@ jobs:
           $apo = Get-ChildItem -Path StMicDriver -Recurse -Filter VirtualMicApo.dll | Sort-Object LastWriteTime -Descending | Select-Object -First 1
           if (-not $apo) { throw "VirtualMicApo.dll not found" }
           $dest = "StMicDriver\\Source\\Main\\x64\\Release"
+          $package = "StMicDriver\\Package"
           New-Item -ItemType Directory -Force -Path $dest | Out-Null
+          New-Item -ItemType Directory -Force -Path $package | Out-Null
           $target = Join-Path $dest "VirtualMicApo.dll"
           $targetPath = (Resolve-Path $target -ErrorAction SilentlyContinue).Path
           if ($targetPath -and ($apo.FullName -ieq $targetPath)) {
@@ -97,6 +99,8 @@ jobs:
             Copy-Item $apo.FullName -Destination $dest -Force
             Write-Host "Staged APO: $($apo.FullName) -> $dest"
           }
+          Copy-Item $apo.FullName -Destination $package -Force
+          Write-Host "Staged APO to package: $package"
 
       - name: Build Driver
         shell: powershell
