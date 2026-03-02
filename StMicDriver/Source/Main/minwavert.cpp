@@ -19,11 +19,8 @@ Abstract:
 #include "minwavert.h"
 #include "SidebandData.h"
 #include "minwavertstream.h"
-#include "minwavert.h"
-#include "minwavertstream.h"
 #include "micarraywavtable.h"
 #include "StMicCommon.h"
-#include "SidebandData.h"
 
 #define EFFECTS_LIST_COUNT 2
 
@@ -1641,41 +1638,60 @@ Return Value:
                 ntStatus = pWaveHelper->PropertyHandlerProposedFormat2(PropertyRequest);
                 break;
 
-            case KSPROPERTY_STMIC_PUSHAUDIO:
-                // Handle Audio Push
-                if (IsEqualGUIDAligned(*PropertyRequest->PropertyItem->Set, KSPROPERTY_SET_STMIC)) {
-                   if (PropertyRequest->ValueSize >= sizeof(STMIC_AUDIO_DATA)) {
-                       PSTMIC_AUDIO_DATA pData = (PSTMIC_AUDIO_DATA)PropertyRequest->Value;
-                       // Validation
-                       if (PropertyRequest->ValueSize >= sizeof(ULONG) + pData->Size) {
-                           g_SidebandData.Write(pData->Data, pData->Size);
-                           ntStatus = STATUS_SUCCESS;
-                       } else {
-                           ntStatus = STATUS_BUFFER_TOO_SMALL;
-                       }
-                   } else {
-                        ntStatus = STATUS_BUFFER_TOO_SMALL;
-                   }
-                }
-                break;
-
             default:
                 DPF(D_TERSE, ("[PropertyHandler_WaveFilter: Invalid Device Request]"));
         }
     }
     else if (IsEqualGUIDAligned(*PropertyRequest->PropertyItem->Set, KSPROPERTY_SET_STMIC))
     {
-         // Fallback if checked outside Pin Set
-         if (PropertyRequest->PropertyItem->Id == KSPROPERTY_STMIC_PUSHAUDIO) {
-             // Same logic
-              if (PropertyRequest->ValueSize >= sizeof(STMIC_AUDIO_DATA)) {
-                   PSTMIC_AUDIO_DATA pData = (PSTMIC_AUDIO_DATA)PropertyRequest->Value;
-                   if (PropertyRequest->ValueSize >= sizeof(ULONG) + pData->Size) {
-                       g_SidebandData.Write(pData->Data, pData->Size);
-                       ntStatus = STATUS_SUCCESS;
-                   }
-               }
-         }
+        if (PropertyRequest->PropertyItem->Id == KSPROPERTY_STMIC_PUSHAUDIO)
+        {
+            if (PropertyRequest->Verb & KSPROPERTY_TYPE_SET)
+            {
+                struct STMIC_BUFFER_CANDIDATE
+                {
+                    PVOID Buffer;
+                    ULONG Size;
+                };
+
+                const STMIC_BUFFER_CANDIDATE candidates[] =
+                {
+                    { PropertyRequest->Value,    PropertyRequest->ValueSize    },
+                    { PropertyRequest->Instance, PropertyRequest->InstanceSize }
+                };
+
+                const ULONG payloadHeaderSize = FIELD_OFFSET(STMIC_AUDIO_DATA, Data);
+                ntStatus = STATUS_BUFFER_TOO_SMALL;
+
+                for (UINT32 i = 0; i < ARRAYSIZE(candidates); ++i)
+                {
+                    if (candidates[i].Buffer == NULL || candidates[i].Size < payloadHeaderSize)
+                    {
+                        continue;
+                    }
+
+                    PSTMIC_AUDIO_DATA pData = reinterpret_cast<PSTMIC_AUDIO_DATA>(candidates[i].Buffer);
+                    ULONG maxPayloadSize = candidates[i].Size - payloadHeaderSize;
+
+                    if (pData->Size > maxPayloadSize)
+                    {
+                        continue;
+                    }
+
+                    if (pData->Size > 0)
+                    {
+                        g_SidebandData.Write(pData->Data, pData->Size);
+                    }
+
+                    ntStatus = STATUS_SUCCESS;
+                    break;
+                }
+            }
+            else
+            {
+                ntStatus = STATUS_INVALID_DEVICE_REQUEST;
+            }
+        }
     }
 
     pWaveHelper->Release();

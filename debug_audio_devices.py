@@ -2,6 +2,10 @@
 Debug: List all audio devices using different methods
 """
 import subprocess
+import sys
+
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 print("="*70)
 print("Audio Devices Debug")
@@ -81,4 +85,3 @@ print("  ✅ Method 4 (Registry) → Device is registered")
 print("\nIf it doesn't appear anywhere → Driver issue or not installed correctly")
 print("="*70)
 
-input("\nPress Enter to exit...")
