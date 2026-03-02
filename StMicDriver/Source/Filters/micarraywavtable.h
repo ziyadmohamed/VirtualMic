@@ -222,67 +222,31 @@ PCCONNECTION_DESCRIPTOR MicArrayWaveMiniportConnections[] =
 //=============================================================================
 
 static
-SIMPLEAUDIOSAMPLE_PROPERTY_ITEM PropertiesMicArrayWaveFilter[] =
+PCPROPERTY_ITEM PropertiesMicArrayWaveFilter[] =
 {
     {
-        {
-            &KSPROPSETID_General,
-            KSPROPERTY_GENERAL_COMPONENTID,
-            KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_BASICSUPPORT,
-            PropertyHandler_WaveFilter,
-        },
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        0
+        &KSPROPSETID_General,
+        KSPROPERTY_GENERAL_COMPONENTID,
+        KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_BASICSUPPORT,
+        PropertyHandler_WaveFilter,
     },
     {
-        {
-            &KSPROPSETID_Pin,
-            KSPROPERTY_PIN_PROPOSEDATAFORMAT,
-            KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_BASICSUPPORT,
-            PropertyHandler_WaveFilter,
-        },
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        0
+        &KSPROPSETID_Pin,
+        KSPROPERTY_PIN_PROPOSEDATAFORMAT,
+        KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_BASICSUPPORT,
+        PropertyHandler_WaveFilter,
     },
     {
-        {
-            &KSPROPSETID_Pin,
-            KSPROPERTY_PIN_PROPOSEDATAFORMAT2,
-            KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_BASICSUPPORT,
-            PropertyHandler_WaveFilter,
-        },
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        0
+        &KSPROPSETID_Pin,
+        KSPROPERTY_PIN_PROPOSEDATAFORMAT2,
+        KSPROPERTY_TYPE_GET | KSPROPERTY_TYPE_BASICSUPPORT,
+        PropertyHandler_WaveFilter,
     },
     {
-        {
-            &KSPROPERTY_SET_STMIC,
-            KSPROPERTY_STMIC_PUSHAUDIO,
-            KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_BASICSUPPORT,
-            PropertyHandler_WaveFilter,
-        },
-        0,
-        0,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        0
+        &KSPROPERTY_SET_STMIC,
+        KSPROPERTY_STMIC_PUSHAUDIO,
+        KSPROPERTY_TYPE_SET | KSPROPERTY_TYPE_BASICSUPPORT,
+        PropertyHandler_WaveFilter,
     },
 };
 
