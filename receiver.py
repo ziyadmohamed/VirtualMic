@@ -657,6 +657,10 @@ def read_stream_header(sock, fallback_sample_rate: int, fallback_channels: int) 
         print(f"Detected Bluetooth stream header: {sample_rate} Hz, {channels} channel(s)")
         return sample_rate, channels, bytes(initial[STREAM_HEADER_SIZE:])
 
+    print(
+        "Bluetooth stream header missing or invalid; "
+        f"using fallback {fallback_sample_rate} Hz, {fallback_channels} channel(s)"
+    )
     return fallback_sample_rate, fallback_channels, bytes(initial)
 
 
@@ -684,9 +688,12 @@ def stream_bluetooth_to_bmmic(args: argparse.Namespace) -> None:
             args.retry_delay,
         )
         print(f"Connected to {mac_address} on RFCOMM channel {connected_channel}")
+        fallback_sample_rate = args.sample_rate
+        if fallback_sample_rate <= 0:
+            fallback_sample_rate = 16000 if args.input_channels == 2 else 24000
         stream_sample_rate, stream_channels, initial_data = read_stream_header(
             sock,
-            args.sample_rate,
+            fallback_sample_rate,
             args.input_channels,
         )
         input_frame_bytes = stream_channels * 2
@@ -765,7 +772,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--connect-timeout", type=float, default=5.0, help="Per-channel Bluetooth connect timeout in seconds")
     parser.add_argument("--connect-attempts", type=int, default=2, help="How many times to try each RFCOMM channel before failing")
     parser.add_argument("--retry-delay", type=float, default=0.5, help="Delay between failed RFCOMM connect attempts in seconds")
-    parser.add_argument("--sample-rate", type=int, default=48000, help="Input sample rate sent by Android")
+    parser.add_argument("--sample-rate", type=int, default=0, help="Fallback input sample rate when the Bluetooth stream header is missing. Default: 16000 for stereo, 24000 for mono")
     parser.add_argument("--input-channels", type=int, choices=(1, 2), default=1, help="Android stream channel count. Use 2 only if the app runs in Stereo mode")
     parser.add_argument("--chunk-ms", type=int, default=5, help="How much Bluetooth audio to batch before injecting into BM Mic")
     parser.add_argument("--flush-ms", type=float, default=3.0, help="Maximum time to wait before flushing a partial chunk into BM Mic")

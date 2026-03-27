@@ -152,7 +152,14 @@ class MainActivity : ComponentActivity() {
                             it.enableAGC = enableAGC
                             it.enableNS = enableNS
                         }
-                        startMic(transportMode == TransportMode.BLUETOOTH)
+                        startMic(
+                            enableBluetooth = transportMode == TransportMode.BLUETOOTH,
+                            gain = gain,
+                            micSource = micSource,
+                            useStereo = useStereo,
+                            enableAGC = enableAGC,
+                            enableNS = enableNS,
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxWidth()
@@ -235,10 +242,22 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun startMic(enableBluetooth: Boolean) {
+    private fun startMic(
+        enableBluetooth: Boolean,
+        gain: Float,
+        micSource: Int,
+        useStereo: Boolean,
+        enableAGC: Boolean,
+        enableNS: Boolean,
+    ) {
         val intent = Intent(this, MicService::class.java).apply {
             putExtra(MicService.EXTRA_ENABLE_BT, enableBluetooth)
             putExtra(MicService.EXTRA_MUTE_LOCAL, enableBluetooth)
+            putExtra(MicService.EXTRA_GAIN, gain)
+            putExtra(MicService.EXTRA_MIC_SOURCE, micSource)
+            putExtra(MicService.EXTRA_USE_STEREO, useStereo)
+            putExtra(MicService.EXTRA_ENABLE_AGC, enableAGC)
+            putExtra(MicService.EXTRA_ENABLE_NS, enableNS)
         }
         startForegroundService(intent)
     }

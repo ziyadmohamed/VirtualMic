@@ -64,9 +64,18 @@ class MicService : Service() {
         
         val enableBt = intent?.getBooleanExtra(EXTRA_ENABLE_BT, false) ?: false
         val muteLocal = intent?.getBooleanExtra(EXTRA_MUTE_LOCAL, false) ?: false
+        audioEngine.gainFactor = intent?.getFloatExtra(EXTRA_GAIN, audioEngine.gainFactor) ?: audioEngine.gainFactor
+        audioEngine.selectedSource = intent?.getIntExtra(EXTRA_MIC_SOURCE, audioEngine.selectedSource) ?: audioEngine.selectedSource
+        audioEngine.useStereo = intent?.getBooleanExtra(EXTRA_USE_STEREO, audioEngine.useStereo) ?: audioEngine.useStereo
+        audioEngine.enableAGC = intent?.getBooleanExtra(EXTRA_ENABLE_AGC, audioEngine.enableAGC) ?: audioEngine.enableAGC
+        audioEngine.enableNS = intent?.getBooleanExtra(EXTRA_ENABLE_NS, audioEngine.enableNS) ?: audioEngine.enableNS
         
         audioEngine.bluetoothOptimized = enableBt
         audioEngine.muteLocal = muteLocal
+        Log.d(
+            "MicService",
+            "Starting mic: bt=$enableBt stereo=${audioEngine.useStereo} sampleRate=${audioEngine.currentSampleRate()} channels=${audioEngine.currentChannelCount()} source=${audioEngine.selectedSource} gain=${audioEngine.gainFactor}"
+        )
         if (!audioEngine.isRunning) {
             audioEngine.start()
         }
@@ -139,15 +148,18 @@ class MicService : Service() {
     }
 
     private fun writeBluetoothHeader(socket: BluetoothSocket) {
+        val sampleRate = audioEngine.currentSampleRate()
+        val channels = audioEngine.currentChannelCount()
         val header = ByteBuffer.allocate(12)
             .order(ByteOrder.LITTLE_ENDIAN)
             .put(byteArrayOf(0x53, 0x54, 0x4D, 0x31))
-            .putInt(audioEngine.currentSampleRate())
-            .putShort(audioEngine.currentChannelCount().toShort())
+            .putInt(sampleRate)
+            .putShort(channels.toShort())
             .putShort(1)
             .array()
         socket.outputStream.write(header)
         socket.outputStream.flush()
+        Log.d("MicService", "Sent Bluetooth header: ${sampleRate}Hz, ${channels}ch")
     }
 
     companion object {
@@ -155,5 +167,10 @@ class MicService : Service() {
         const val ACTION_STOP = "STOP_ACTION"
         const val EXTRA_ENABLE_BT = "ENABLE_BT"
         const val EXTRA_MUTE_LOCAL = "MUTE_LOCAL"
+        const val EXTRA_GAIN = "GAIN"
+        const val EXTRA_MIC_SOURCE = "MIC_SOURCE"
+        const val EXTRA_USE_STEREO = "USE_STEREO"
+        const val EXTRA_ENABLE_AGC = "ENABLE_AGC"
+        const val EXTRA_ENABLE_NS = "ENABLE_NS"
     }
 }
