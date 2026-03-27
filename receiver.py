@@ -4,10 +4,10 @@ Bluetooth RFCOMM receiver for StMic.
 This script connects from Windows to the Android phone over Bluetooth and
 pushes the incoming PCM stream into the BM Mic driver.
 
-Android side defaults:
-- 48 kHz
-- PCM 16-bit
-- mono unless the "Stereo" option is enabled
+Android side can send:
+- raw PCM16
+- raw float32
+- packetized Opus
 
 BM Mic expects 48 kHz, 32-bit, stereo PCM, so the receiver converts the
 incoming stream before injecting it into the driver.
@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import ctypes
 from ctypes import wintypes
+import os
 import socket
 import struct
 import sys
@@ -32,6 +33,26 @@ try:
     import sounddevice as sd
 except ImportError:
     sd = None
+
+try:
+    import pyogg  # type: ignore
+except ImportError:
+    pyogg = None
+
+opuslib = None
+if pyogg is not None:
+    pyogg_dir = os.path.dirname(pyogg.__file__)
+    try:
+        if hasattr(os, "add_dll_directory"):
+            os.add_dll_directory(pyogg_dir)
+    except OSError:
+        pass
+    os.environ["PATH"] = pyogg_dir + os.pathsep + os.environ.get("PATH", "")
+
+try:
+    import opuslib  # type: ignore
+except Exception:
+    opuslib = None
 
 
 kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
@@ -112,6 +133,8 @@ STREAM_HEADER_MAGIC = b"STM1"
 STREAM_HEADER_SIZE = 12
 PCM16_FORMAT_CODE = 1
 PCM_FLOAT32_FORMAT_CODE = 3
+OPUS_FORMAT_CODE = 10
+OPUS_PACKET_PREFIX_SIZE = 4
 
 
 def ctl_code(device_type: int, function: int, method: int, access: int) -> int:
@@ -511,6 +534,8 @@ def bytes_per_sample_for_format(format_code: int) -> int:
         return 2
     if format_code == PCM_FLOAT32_FORMAT_CODE:
         return 4
+    if format_code == OPUS_FORMAT_CODE:
+        raise ValueError("Opus is packetized and does not have a fixed bytes-per-sample value")
     raise ValueError(f"Unsupported Bluetooth audio format code: {format_code}")
 
 
@@ -519,6 +544,8 @@ def format_name(format_code: int) -> str:
         return "pcm16"
     if format_code == PCM_FLOAT32_FORMAT_CODE:
         return "float32"
+    if format_code == OPUS_FORMAT_CODE:
+        return "opus"
     return f"unknown({format_code})"
 
 
@@ -758,6 +785,24 @@ def convert_float32_to_bmmic_python(data: bytes, input_channels: int, input_samp
     return bytes(output)
 
 
+class OpusPacketDecoder:
+    def __init__(self, sample_rate: int, channels: int, gain: float):
+        if opuslib is None:
+            raise RuntimeError(
+                "Opus decoding is unavailable. Ensure python can load libopus "
+                "(for example via the installed pyogg package)."
+            )
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.gain = gain
+        self.decoder = opuslib.Decoder(sample_rate, channels)
+        self.max_frame_size = max(960, (sample_rate * 60) // 1000)
+
+    def decode_packet_to_bmmic(self, packet: bytes) -> bytes:
+        pcm16 = self.decoder.decode(packet, self.max_frame_size)
+        return convert_pcm16_to_bmmic(pcm16, self.channels, self.sample_rate, self.gain)
+
+
 def read_stream_header(
     sock,
     fallback_sample_rate: int,
@@ -773,7 +818,7 @@ def read_stream_header(
 
     if len(initial) >= STREAM_HEADER_SIZE and bytes(initial[:4]) == STREAM_HEADER_MAGIC:
         _, sample_rate, channels, format_code = struct.unpack("<4sIHH", bytes(initial[:STREAM_HEADER_SIZE]))
-        if format_code not in (PCM16_FORMAT_CODE, PCM_FLOAT32_FORMAT_CODE):
+        if format_code not in (PCM16_FORMAT_CODE, PCM_FLOAT32_FORMAT_CODE, OPUS_FORMAT_CODE):
             raise RuntimeError(f"Unsupported Bluetooth audio format code: {format_code}")
         if channels not in (1, 2):
             raise RuntimeError(f"Unsupported Bluetooth channel count: {channels}")
@@ -789,6 +834,56 @@ def read_stream_header(
         f"{format_name(fallback_format_code)}"
     )
     return fallback_sample_rate, fallback_channels, fallback_format_code, bytes(initial)
+
+
+def stream_opus_packets_to_bmmic(
+    sock,
+    driver: StMicKsClient,
+    initial_data: bytes,
+    stream_sample_rate: int,
+    stream_channels: int,
+    gain: float,
+    recv_size: int,
+):
+    decoder = OpusPacketDecoder(stream_sample_rate, stream_channels, gain)
+    pending = bytearray(initial_data)
+    total_in = 0
+    total_out = 0
+    next_report = time.time() + 5.0
+
+    while True:
+        data = sock.recv(recv_size)
+        if not data:
+            print("Bluetooth connection closed by remote device.")
+            break
+
+        total_in += len(data)
+        pending.extend(data)
+
+        while len(pending) >= OPUS_PACKET_PREFIX_SIZE:
+            packet_size = struct.unpack_from("<I", pending, 0)[0]
+            if len(pending) < OPUS_PACKET_PREFIX_SIZE + packet_size:
+                break
+            start = OPUS_PACKET_PREFIX_SIZE
+            end = start + packet_size
+            packet = bytes(pending[start:end])
+            del pending[:end]
+
+            converted = decoder.decode_packet_to_bmmic(packet)
+            if not driver.push_audio(converted):
+                raise RuntimeError("Failed to inject decoded Opus audio into BM Mic")
+            total_out += len(converted)
+
+        now = time.time()
+        if now >= next_report:
+            approx_seconds = total_out / float(48000 * 2 * 4)
+            print(
+                f"Received {total_in} compressed bytes, "
+                f"injected {total_out} bytes into BM Mic (~{approx_seconds:.1f}s audio)."
+            )
+            next_report = now + 5.0
+
+    return total_in, total_out
 
 
 def stream_bluetooth_to_bmmic(args: argparse.Namespace) -> None:
@@ -817,9 +912,11 @@ def stream_bluetooth_to_bmmic(args: argparse.Namespace) -> None:
         print(f"Connected to {mac_address} on RFCOMM channel {connected_channel}")
         fallback_sample_rate = args.sample_rate
         if fallback_sample_rate <= 0:
-            fallback_sample_rate = 24000
+            fallback_sample_rate = 48000 if args.input_format == "opus" else 24000
         if args.input_format == "auto":
             fallback_format_code = PCM_FLOAT32_FORMAT_CODE if args.input_channels == 2 else PCM16_FORMAT_CODE
+        elif args.input_format == "opus":
+            fallback_format_code = OPUS_FORMAT_CODE
         elif args.input_format == "float32":
             fallback_format_code = PCM_FLOAT32_FORMAT_CODE
         else:
@@ -830,79 +927,95 @@ def stream_bluetooth_to_bmmic(args: argparse.Namespace) -> None:
             args.input_channels,
             fallback_format_code,
         )
-        input_frame_bytes = stream_channels * bytes_per_sample_for_format(stream_format_code)
-        frames_per_chunk = max(1, int(stream_sample_rate * (args.chunk_ms / 1000.0)))
-        input_chunk_bytes = frames_per_chunk * input_frame_bytes
-        recv_size = max(args.recv_size, input_chunk_bytes)
         print("Streaming Bluetooth audio into BM Mic...")
 
-        pending = bytearray(initial_data)
-        next_report = time.time() + 5.0
-        last_flush = time.perf_counter()
-
-        try:
-            while True:
-                data = sock.recv(recv_size)
-                if not data:
-                    print("Bluetooth connection closed by remote device.")
-                    break
-
-                total_in += len(data)
-                pending.extend(data)
-
-                while len(pending) >= input_chunk_bytes:
-                    raw_chunk = bytes(pending[:input_chunk_bytes])
-                    del pending[:input_chunk_bytes]
-
-                    converted = convert_input_to_bmmic(
-                        raw_chunk,
-                        stream_channels,
-                        stream_sample_rate,
-                        stream_format_code,
-                        args.gain,
-                    )
-                    if not driver.push_audio(converted):
-                        raise RuntimeError("Failed to inject audio into BM Mic")
-                    total_out += len(converted)
-                    last_flush = time.perf_counter()
-
-                partial_bytes = len(pending) - (len(pending) % input_frame_bytes)
-                if partial_bytes > 0 and (time.perf_counter() - last_flush) * 1000.0 >= args.flush_ms:
-                    raw_chunk = bytes(pending[:partial_bytes])
-                    del pending[:partial_bytes]
-                    converted = convert_input_to_bmmic(
-                        raw_chunk,
-                        stream_channels,
-                        stream_sample_rate,
-                        stream_format_code,
-                        args.gain,
-                    )
-                    if not driver.push_audio(converted):
-                        raise RuntimeError("Failed to inject audio into BM Mic")
-                    total_out += len(converted)
-                    last_flush = time.perf_counter()
-
-                now = time.time()
-                if now >= next_report:
-                    seconds = total_in / float(stream_sample_rate * input_frame_bytes)
-                    print(
-                        f"Received {total_in} bytes ({seconds:.1f}s input), "
-                        f"injected {total_out} bytes into BM Mic."
-                    )
-                    next_report = now + 5.0
-        finally:
-            usable = len(pending) - (len(pending) % input_frame_bytes)
-            if usable > 0:
-                converted = convert_input_to_bmmic(
-                    bytes(pending[:usable]),
-                    stream_channels,
+        if stream_format_code == OPUS_FORMAT_CODE:
+            recv_size = max(args.recv_size, 2048)
+            try:
+                total_in, total_out = stream_opus_packets_to_bmmic(
+                    sock,
+                    driver,
+                    initial_data,
                     stream_sample_rate,
-                    stream_format_code,
+                    stream_channels,
                     args.gain,
+                    recv_size,
                 )
-                if driver.push_audio(converted):
-                    total_out += len(converted)
-            sock.close()
+            finally:
+                sock.close()
+        else:
+            input_frame_bytes = stream_channels * bytes_per_sample_for_format(stream_format_code)
+            frames_per_chunk = max(1, int(stream_sample_rate * (args.chunk_ms / 1000.0)))
+            input_chunk_bytes = frames_per_chunk * input_frame_bytes
+            recv_size = max(args.recv_size, input_chunk_bytes)
+
+            pending = bytearray(initial_data)
+            next_report = time.time() + 5.0
+            last_flush = time.perf_counter()
+
+            try:
+                while True:
+                    data = sock.recv(recv_size)
+                    if not data:
+                        print("Bluetooth connection closed by remote device.")
+                        break
+
+                    total_in += len(data)
+                    pending.extend(data)
+
+                    while len(pending) >= input_chunk_bytes:
+                        raw_chunk = bytes(pending[:input_chunk_bytes])
+                        del pending[:input_chunk_bytes]
+
+                        converted = convert_input_to_bmmic(
+                            raw_chunk,
+                            stream_channels,
+                            stream_sample_rate,
+                            stream_format_code,
+                            args.gain,
+                        )
+                        if not driver.push_audio(converted):
+                            raise RuntimeError("Failed to inject audio into BM Mic")
+                        total_out += len(converted)
+                        last_flush = time.perf_counter()
+
+                    partial_bytes = len(pending) - (len(pending) % input_frame_bytes)
+                    if partial_bytes > 0 and (time.perf_counter() - last_flush) * 1000.0 >= args.flush_ms:
+                        raw_chunk = bytes(pending[:partial_bytes])
+                        del pending[:partial_bytes]
+                        converted = convert_input_to_bmmic(
+                            raw_chunk,
+                            stream_channels,
+                            stream_sample_rate,
+                            stream_format_code,
+                            args.gain,
+                        )
+                        if not driver.push_audio(converted):
+                            raise RuntimeError("Failed to inject audio into BM Mic")
+                        total_out += len(converted)
+                        last_flush = time.perf_counter()
+
+                    now = time.time()
+                    if now >= next_report:
+                        seconds = total_in / float(stream_sample_rate * input_frame_bytes)
+                        print(
+                            f"Received {total_in} bytes ({seconds:.1f}s input), "
+                            f"injected {total_out} bytes into BM Mic."
+                        )
+                        next_report = now + 5.0
+            finally:
+                usable = len(pending) - (len(pending) % input_frame_bytes)
+                if usable > 0:
+                    converted = convert_input_to_bmmic(
+                        bytes(pending[:usable]),
+                        stream_channels,
+                        stream_sample_rate,
+                        stream_format_code,
+                        args.gain,
+                    )
+                    if driver.push_audio(converted):
+                        total_out += len(converted)
+                sock.close()
     finally:
         drain.close()
         driver.close()
@@ -926,7 +1039,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--retry-delay", type=float, default=0.5, help="Delay between failed RFCOMM connect attempts in seconds")
     parser.add_argument("--sample-rate", type=int, default=0, help="Fallback input sample rate when the Bluetooth stream header is missing. Default: 24000")
     parser.add_argument("--input-channels", type=int, choices=(1, 2), default=1, help="Android stream channel count. Use 2 only if the app runs in Stereo mode")
-    parser.add_argument("--input-format", choices=("auto", "pcm16", "float32"), default="auto", help="Fallback Bluetooth sample format when the stream header is missing")
+    parser.add_argument("--input-format", choices=("auto", "pcm16", "float32", "opus"), default="auto", help="Fallback Bluetooth sample format when the stream header is missing")
     parser.add_argument("--chunk-ms", type=int, default=5, help="How much Bluetooth audio to batch before injecting into BM Mic")
     parser.add_argument("--flush-ms", type=float, default=3.0, help="Maximum time to wait before flushing a partial chunk into BM Mic")
     parser.add_argument("--recv-size", type=int, default=1024, help="Socket recv size in bytes")

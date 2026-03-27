@@ -236,7 +236,7 @@ class MainActivity : ComponentActivity() {
 
             Spacer(modifier = Modifier.height(20.dp))
             Text(
-                text = "Bluetooth mode now uses a lower-rate mic stream for better stability, then the Windows receiver expands it back into BM Mic.",
+                text = "Bluetooth mode now prefers Opus transport to reduce delay and bandwidth while keeping better quality.",
                 style = MaterialTheme.typography.bodySmall
             )
         }
