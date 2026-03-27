@@ -47,12 +47,12 @@ class AudioEngine {
     var bluetoothOptimized: Boolean = false
     
     fun setStream(stream: OutputStream?) {
-        this.outputStream = stream?.let { BufferedOutputStream(it, 2048) }
+        this.outputStream = stream?.let { BufferedOutputStream(it, 8192) }
     }
 
     fun currentSampleRate(): Int {
         return if (bluetoothOptimized) {
-            if (useStereo) 16000 else 24000
+            24000
         } else {
             48000
         }
@@ -68,6 +68,22 @@ class AudioEngine {
         }
     }
 
+    fun currentTransportFormatCode(): Short {
+        return if (bluetoothOptimized && useStereo) 3 else 1
+    }
+
+    private fun currentAudioEncoding(): Int {
+        return if (bluetoothOptimized && useStereo) {
+            AudioFormat.ENCODING_PCM_FLOAT
+        } else {
+            AudioFormat.ENCODING_PCM_16BIT
+        }
+    }
+
+    private fun currentBytesPerSample(): Int {
+        return if (currentAudioEncoding() == AudioFormat.ENCODING_PCM_FLOAT) 4 else 2
+    }
+
     @SuppressLint("MissingPermission")
     fun start() {
         if (isRunning) return
@@ -77,8 +93,8 @@ class AudioEngine {
         val useMonoForTransport = bluetoothOptimized && !useStereo
         val channelConfigIn = if (!useMonoForTransport && useStereo) AudioFormat.CHANNEL_IN_STEREO else AudioFormat.CHANNEL_IN_MONO
         val channelConfigOut = if (!useMonoForTransport && useStereo) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
-        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-        val bytesPerFrame = currentChannelCount() * 2
+        val audioFormat = currentAudioEncoding()
+        val bytesPerFrame = currentChannelCount() * currentBytesPerSample()
 
         val minBufSize = AudioRecord.getMinBufferSize(sampleRate, channelConfigIn, audioFormat)
         val targetBufferBytes = sampleRate * bytesPerFrame / 100
@@ -138,37 +154,65 @@ class AudioEngine {
             audioTrack?.play()
 
             recordJob = CoroutineScope(Dispatchers.Default).launch {
-                val buffer = ShortArray(bufferSize / 2) // 16-bit = 2 bytes per sample
-                while (isActive && isRunning) {
-                    val readResult = audioRecord?.read(buffer, 0, buffer.size) ?: -1
-                    if (readResult > 0) {
-                        // Apply digital gain
-                        if (gainFactor != 1.0f) {
-                            for (i in 0 until readResult) {
-                                // Simple clamping to avoid overflow wrapping
-                                var sample = (buffer[i] * gainFactor).toInt()
-                                if (sample > Short.MAX_VALUE) sample = Short.MAX_VALUE.toInt()
-                                if (sample < Short.MIN_VALUE) sample = Short.MIN_VALUE.toInt()
-                                buffer[i] = sample.toShort()
+                if (audioFormat == AudioFormat.ENCODING_PCM_FLOAT) {
+                    val buffer = FloatArray(bufferSize / 4)
+                    var bytes = ByteArray(bufferSize)
+                    while (isActive && isRunning) {
+                        val readResult = audioRecord?.read(buffer, 0, buffer.size, AudioRecord.READ_BLOCKING) ?: -1
+                        if (readResult > 0) {
+                            if (gainFactor != 1.0f) {
+                                for (i in 0 until readResult) {
+                                    buffer[i] = min(1.0f, max(-1.0f, buffer[i] * gainFactor))
+                                }
+                            }
+
+                            outputStream?.let { stream ->
+                                try {
+                                    val byteCount = readResult * 4
+                                    if (bytes.size < byteCount) {
+                                        bytes = ByteArray(byteCount)
+                                    }
+                                    ByteBuffer.wrap(bytes, 0, byteCount)
+                                        .order(ByteOrder.LITTLE_ENDIAN)
+                                        .asFloatBuffer()
+                                        .put(buffer, 0, readResult)
+                                    stream.write(bytes, 0, byteCount)
+                                } catch (e: Exception) {
+                                    Log.e("AudioEngine", "Stream write failed", e)
+                                    outputStream = null
+                                    onStreamError?.invoke(e)
+                                }
                             }
                         }
-                        
-                        // Write to local output if not muted
-                        if (!muteLocal) {
-                            audioTrack?.write(buffer, 0, readResult)
-                        }
+                    }
+                } else {
+                    val buffer = ShortArray(bufferSize / 2)
+                    while (isActive && isRunning) {
+                        val readResult = audioRecord?.read(buffer, 0, buffer.size) ?: -1
+                        if (readResult > 0) {
+                            if (gainFactor != 1.0f) {
+                                for (i in 0 until readResult) {
+                                    var sample = (buffer[i] * gainFactor).toInt()
+                                    if (sample > Short.MAX_VALUE) sample = Short.MAX_VALUE.toInt()
+                                    if (sample < Short.MIN_VALUE) sample = Short.MIN_VALUE.toInt()
+                                    buffer[i] = sample.toShort()
+                                }
+                            }
+                            
+                            if (!muteLocal) {
+                                audioTrack?.write(buffer, 0, readResult)
+                            }
 
-                        // Write to OutputStream (Bluetooth) if available
-                        outputStream?.let { stream ->
-                            try {
-                                val bytes = ByteArray(readResult * 2)
-                                ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(buffer, 0, readResult)
-                                stream.write(bytes)
-                                stream.flush()
-                            } catch (e: Exception) {
-                                Log.e("AudioEngine", "Stream write failed", e)
-                                outputStream = null
-                                onStreamError?.invoke(e)
+                            outputStream?.let { stream ->
+                                try {
+                                    val bytes = ByteArray(readResult * 2)
+                                    ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(buffer, 0, readResult)
+                                    stream.write(bytes)
+                                } catch (e: Exception) {
+                                    Log.e("AudioEngine", "Stream write failed", e)
+                                    outputStream = null
+                                    onStreamError?.invoke(e)
+                                }
                             }
                         }
                     }

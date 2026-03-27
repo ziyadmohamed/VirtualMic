@@ -74,7 +74,7 @@ class MicService : Service() {
         audioEngine.muteLocal = muteLocal
         Log.d(
             "MicService",
-            "Starting mic: bt=$enableBt stereo=${audioEngine.useStereo} sampleRate=${audioEngine.currentSampleRate()} channels=${audioEngine.currentChannelCount()} source=${audioEngine.selectedSource} gain=${audioEngine.gainFactor}"
+            "Starting mic: bt=$enableBt stereo=${audioEngine.useStereo} sampleRate=${audioEngine.currentSampleRate()} channels=${audioEngine.currentChannelCount()} format=${audioEngine.currentTransportFormatCode()} source=${audioEngine.selectedSource} gain=${audioEngine.gainFactor}"
         )
         if (!audioEngine.isRunning) {
             audioEngine.start()
@@ -150,16 +150,17 @@ class MicService : Service() {
     private fun writeBluetoothHeader(socket: BluetoothSocket) {
         val sampleRate = audioEngine.currentSampleRate()
         val channels = audioEngine.currentChannelCount()
+        val formatCode = audioEngine.currentTransportFormatCode()
         val header = ByteBuffer.allocate(12)
             .order(ByteOrder.LITTLE_ENDIAN)
             .put(byteArrayOf(0x53, 0x54, 0x4D, 0x31))
             .putInt(sampleRate)
             .putShort(channels.toShort())
-            .putShort(1)
+            .putShort(formatCode)
             .array()
         socket.outputStream.write(header)
         socket.outputStream.flush()
-        Log.d("MicService", "Sent Bluetooth header: ${sampleRate}Hz, ${channels}ch")
+        Log.d("MicService", "Sent Bluetooth header: ${sampleRate}Hz, ${channels}ch, format=$formatCode")
     }
 
     companion object {

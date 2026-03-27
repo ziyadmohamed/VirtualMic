@@ -111,6 +111,7 @@ DEFAULT_DEVICE_PATHS = [
 STREAM_HEADER_MAGIC = b"STM1"
 STREAM_HEADER_SIZE = 12
 PCM16_FORMAT_CODE = 1
+PCM_FLOAT32_FORMAT_CODE = 3
 
 
 def ctl_code(device_type: int, function: int, method: int, access: int) -> int:
@@ -505,6 +506,36 @@ def connect_rfcomm(
     raise ConnectionError(f"Bluetooth connection failed. Tried channels: {details}")
 
 
+def bytes_per_sample_for_format(format_code: int) -> int:
+    if format_code == PCM16_FORMAT_CODE:
+        return 2
+    if format_code == PCM_FLOAT32_FORMAT_CODE:
+        return 4
+    raise ValueError(f"Unsupported Bluetooth audio format code: {format_code}")
+
+
+def format_name(format_code: int) -> str:
+    if format_code == PCM16_FORMAT_CODE:
+        return "pcm16"
+    if format_code == PCM_FLOAT32_FORMAT_CODE:
+        return "float32"
+    return f"unknown({format_code})"
+
+
+def convert_input_to_bmmic(
+    data: bytes,
+    input_channels: int,
+    input_sample_rate: int,
+    format_code: int,
+    gain: float,
+) -> bytes:
+    if format_code == PCM16_FORMAT_CODE:
+        return convert_pcm16_to_bmmic(data, input_channels, input_sample_rate, gain)
+    if format_code == PCM_FLOAT32_FORMAT_CODE:
+        return convert_float32_to_bmmic(data, input_channels, input_sample_rate, gain)
+    raise ValueError(f"Unsupported Bluetooth audio format code: {format_code}")
+
+
 def convert_pcm16_to_bmmic(data: bytes, input_channels: int, input_sample_rate: int, gain: float) -> bytes:
     if input_channels not in (1, 2):
         raise ValueError("Only mono or stereo PCM16 input is supported")
@@ -640,7 +671,99 @@ def convert_pcm16_to_bmmic_python(data: bytes, input_channels: int, input_sample
     return bytes(output)
 
 
-def read_stream_header(sock, fallback_sample_rate: int, fallback_channels: int) -> tuple[int, int, bytes]:
+def convert_float32_to_bmmic(data: bytes, input_channels: int, input_sample_rate: int, gain: float) -> bytes:
+    if input_channels not in (1, 2):
+        raise ValueError("Only mono or stereo float32 input is supported")
+    if 48000 % input_sample_rate != 0:
+        raise ValueError("Input sample rate must divide 48000 for BM Mic conversion")
+
+    if np is not None:
+        return convert_float32_to_bmmic_numpy(data, input_channels, input_sample_rate, gain)
+    return convert_float32_to_bmmic_python(data, input_channels, input_sample_rate, gain)
+
+
+def convert_float32_to_bmmic_numpy(data: bytes, input_channels: int, input_sample_rate: int, gain: float) -> bytes:
+    samples = np.frombuffer(data, dtype="<f4")
+    if samples.size == 0:
+        return b""
+    frames = samples.reshape(-1, input_channels)
+    factor = _resample_factor(input_sample_rate)
+
+    if input_channels == 1:
+        mono = _downmix_numpy(frames)
+        mono = _upsample_linear_numpy(mono, factor)
+        if gain != 1.0:
+            mono = mono * gain
+        mono = np.clip(mono, -1.0, 1.0)
+        wide = (mono * 2147483647.0).astype("<i4")
+        stereo = np.empty((wide.size, 2), dtype="<i4")
+        stereo[:, 0] = wide
+        stereo[:, 1] = wide
+        return stereo.tobytes()
+
+    left = _upsample_linear_numpy(frames[:, 0].astype(np.float32), factor)
+    right = _upsample_linear_numpy(frames[:, 1].astype(np.float32), factor)
+    if gain != 1.0:
+        left = left * gain
+        right = right * gain
+    left = np.clip(left, -1.0, 1.0)
+    right = np.clip(right, -1.0, 1.0)
+    stereo = np.empty((left.size, 2), dtype="<i4")
+    stereo[:, 0] = (left * 2147483647.0).astype("<i4")
+    stereo[:, 1] = (right * 2147483647.0).astype("<i4")
+    return stereo.tobytes()
+
+
+def _downmix_float_python(data: bytes, input_channels: int) -> list[float]:
+    if input_channels == 1:
+        return [sample for (sample,) in struct.iter_unpack("<f", data)]
+    mixed = []
+    for left, right in struct.iter_unpack("<ff", data):
+        mixed.append((left * 0.75) + (right * 0.25))
+    return mixed
+
+
+def _split_stereo_float_python(data: bytes) -> tuple[list[float], list[float]]:
+    left: list[float] = []
+    right: list[float] = []
+    for lval, rval in struct.iter_unpack("<ff", data):
+        left.append(lval)
+        right.append(rval)
+    return left, right
+
+
+def convert_float32_to_bmmic_python(data: bytes, input_channels: int, input_sample_rate: int, gain: float) -> bytes:
+    factor = _resample_factor(input_sample_rate)
+    if input_channels == 1:
+        mono = _downmix_float_python(data, input_channels)
+        mono = _upsample_linear_python(mono, factor)
+        output = bytearray(len(mono) * 8)
+        offset = 0
+        for sample in mono:
+            scaled = int(max(-1.0, min(1.0, sample * gain)) * 2147483647.0)
+            struct.pack_into("<ii", output, offset, scaled, scaled)
+            offset += 8
+        return bytes(output)
+
+    left, right = _split_stereo_float_python(data)
+    left = _upsample_linear_python(left, factor)
+    right = _upsample_linear_python(right, factor)
+    output = bytearray(len(left) * 8)
+    offset = 0
+    for lval, rval in zip(left, right):
+        scaled_left = int(max(-1.0, min(1.0, lval * gain)) * 2147483647.0)
+        scaled_right = int(max(-1.0, min(1.0, rval * gain)) * 2147483647.0)
+        struct.pack_into("<ii", output, offset, scaled_left, scaled_right)
+        offset += 8
+    return bytes(output)
+
+
+def read_stream_header(
+    sock,
+    fallback_sample_rate: int,
+    fallback_channels: int,
+    fallback_format_code: int,
+) -> tuple[int, int, int, bytes]:
     initial = bytearray()
     while len(initial) < STREAM_HEADER_SIZE:
         chunk = sock.recv(STREAM_HEADER_SIZE - len(initial))
@@ -650,18 +773,22 @@ def read_stream_header(sock, fallback_sample_rate: int, fallback_channels: int) 
 
     if len(initial) >= STREAM_HEADER_SIZE and bytes(initial[:4]) == STREAM_HEADER_MAGIC:
         _, sample_rate, channels, format_code = struct.unpack("<4sIHH", bytes(initial[:STREAM_HEADER_SIZE]))
-        if format_code != PCM16_FORMAT_CODE:
+        if format_code not in (PCM16_FORMAT_CODE, PCM_FLOAT32_FORMAT_CODE):
             raise RuntimeError(f"Unsupported Bluetooth audio format code: {format_code}")
         if channels not in (1, 2):
             raise RuntimeError(f"Unsupported Bluetooth channel count: {channels}")
-        print(f"Detected Bluetooth stream header: {sample_rate} Hz, {channels} channel(s)")
-        return sample_rate, channels, bytes(initial[STREAM_HEADER_SIZE:])
+        print(
+            f"Detected Bluetooth stream header: {sample_rate} Hz, "
+            f"{channels} channel(s), {format_name(format_code)}"
+        )
+        return sample_rate, channels, format_code, bytes(initial[STREAM_HEADER_SIZE:])
 
     print(
         "Bluetooth stream header missing or invalid; "
-        f"using fallback {fallback_sample_rate} Hz, {fallback_channels} channel(s)"
+        f"using fallback {fallback_sample_rate} Hz, {fallback_channels} channel(s), "
+        f"{format_name(fallback_format_code)}"
     )
-    return fallback_sample_rate, fallback_channels, bytes(initial)
+    return fallback_sample_rate, fallback_channels, fallback_format_code, bytes(initial)
 
 
 def stream_bluetooth_to_bmmic(args: argparse.Namespace) -> None:
@@ -690,13 +817,20 @@ def stream_bluetooth_to_bmmic(args: argparse.Namespace) -> None:
         print(f"Connected to {mac_address} on RFCOMM channel {connected_channel}")
         fallback_sample_rate = args.sample_rate
         if fallback_sample_rate <= 0:
-            fallback_sample_rate = 16000 if args.input_channels == 2 else 24000
-        stream_sample_rate, stream_channels, initial_data = read_stream_header(
+            fallback_sample_rate = 24000
+        if args.input_format == "auto":
+            fallback_format_code = PCM_FLOAT32_FORMAT_CODE if args.input_channels == 2 else PCM16_FORMAT_CODE
+        elif args.input_format == "float32":
+            fallback_format_code = PCM_FLOAT32_FORMAT_CODE
+        else:
+            fallback_format_code = PCM16_FORMAT_CODE
+        stream_sample_rate, stream_channels, stream_format_code, initial_data = read_stream_header(
             sock,
             fallback_sample_rate,
             args.input_channels,
+            fallback_format_code,
         )
-        input_frame_bytes = stream_channels * 2
+        input_frame_bytes = stream_channels * bytes_per_sample_for_format(stream_format_code)
         frames_per_chunk = max(1, int(stream_sample_rate * (args.chunk_ms / 1000.0)))
         input_chunk_bytes = frames_per_chunk * input_frame_bytes
         recv_size = max(args.recv_size, input_chunk_bytes)
@@ -720,7 +854,13 @@ def stream_bluetooth_to_bmmic(args: argparse.Namespace) -> None:
                     raw_chunk = bytes(pending[:input_chunk_bytes])
                     del pending[:input_chunk_bytes]
 
-                    converted = convert_pcm16_to_bmmic(raw_chunk, stream_channels, stream_sample_rate, args.gain)
+                    converted = convert_input_to_bmmic(
+                        raw_chunk,
+                        stream_channels,
+                        stream_sample_rate,
+                        stream_format_code,
+                        args.gain,
+                    )
                     if not driver.push_audio(converted):
                         raise RuntimeError("Failed to inject audio into BM Mic")
                     total_out += len(converted)
@@ -730,7 +870,13 @@ def stream_bluetooth_to_bmmic(args: argparse.Namespace) -> None:
                 if partial_bytes > 0 and (time.perf_counter() - last_flush) * 1000.0 >= args.flush_ms:
                     raw_chunk = bytes(pending[:partial_bytes])
                     del pending[:partial_bytes]
-                    converted = convert_pcm16_to_bmmic(raw_chunk, stream_channels, stream_sample_rate, args.gain)
+                    converted = convert_input_to_bmmic(
+                        raw_chunk,
+                        stream_channels,
+                        stream_sample_rate,
+                        stream_format_code,
+                        args.gain,
+                    )
                     if not driver.push_audio(converted):
                         raise RuntimeError("Failed to inject audio into BM Mic")
                     total_out += len(converted)
@@ -747,7 +893,13 @@ def stream_bluetooth_to_bmmic(args: argparse.Namespace) -> None:
         finally:
             usable = len(pending) - (len(pending) % input_frame_bytes)
             if usable > 0:
-                converted = convert_pcm16_to_bmmic(bytes(pending[:usable]), stream_channels, stream_sample_rate, args.gain)
+                converted = convert_input_to_bmmic(
+                    bytes(pending[:usable]),
+                    stream_channels,
+                    stream_sample_rate,
+                    stream_format_code,
+                    args.gain,
+                )
                 if driver.push_audio(converted):
                     total_out += len(converted)
             sock.close()
@@ -772,12 +924,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--connect-timeout", type=float, default=5.0, help="Per-channel Bluetooth connect timeout in seconds")
     parser.add_argument("--connect-attempts", type=int, default=2, help="How many times to try each RFCOMM channel before failing")
     parser.add_argument("--retry-delay", type=float, default=0.5, help="Delay between failed RFCOMM connect attempts in seconds")
-    parser.add_argument("--sample-rate", type=int, default=0, help="Fallback input sample rate when the Bluetooth stream header is missing. Default: 16000 for stereo, 24000 for mono")
+    parser.add_argument("--sample-rate", type=int, default=0, help="Fallback input sample rate when the Bluetooth stream header is missing. Default: 24000")
     parser.add_argument("--input-channels", type=int, choices=(1, 2), default=1, help="Android stream channel count. Use 2 only if the app runs in Stereo mode")
+    parser.add_argument("--input-format", choices=("auto", "pcm16", "float32"), default="auto", help="Fallback Bluetooth sample format when the stream header is missing")
     parser.add_argument("--chunk-ms", type=int, default=5, help="How much Bluetooth audio to batch before injecting into BM Mic")
     parser.add_argument("--flush-ms", type=float, default=3.0, help="Maximum time to wait before flushing a partial chunk into BM Mic")
     parser.add_argument("--recv-size", type=int, default=1024, help="Socket recv size in bytes")
-    parser.add_argument("--gain", type=float, default=2.0, help="Digital gain applied before injecting into BM Mic")
+    parser.add_argument("--gain", type=float, default=1.0, help="Digital gain applied before injecting into BM Mic")
     parser.add_argument("--no-bmmic-drain", action="store_true", help="Do not open a background BM Mic capture stream to keep latency down")
     parser.add_argument("--device-index", type=int, help="Optional BM Mic interface index from the internal candidate list")
     return parser
