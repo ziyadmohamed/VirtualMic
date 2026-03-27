@@ -1589,8 +1589,8 @@ Return Value:
 
     adapterCommon = PADAPTERCOMMON(this);
 
-    // Initialize SidebandData (1MB buffer)
-    g_SidebandData.Init(1024 * 1024);
+    // Keep the newest audio instead of queueing seconds of stale mic data.
+    g_SidebandData.Init(64 * 1024);
 
     ntStatus = CreateAudioInterfaceWithProperties(Name, TemplateName, cPropertyCount, pProperties, &symbolicLink);
     if (NT_SUCCESS(ntStatus))

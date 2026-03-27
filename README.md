@@ -61,21 +61,39 @@ devcon.exe install SimpleAudioSample.inf Root\SimpleAudioSample
 ### With Python Receiver
 
 See `receiver.py` for a Python script that:
-- Receives audio from Android via network
-- Sends audio to driver via IOCTL
+- Connects to Android over Bluetooth RFCOMM
+- Converts Android PCM16 audio to the BM Mic format
+- Sends audio to driver via KS property IOCTL
 - Makes it available as system microphone
 
 ### With Android App
 
 See `app/` directory for Android application that:
 - Records from device microphone
-- Streams audio over WiFi/network
-- Connects to Python receiver
+- Streams audio over Bluetooth RFCOMM
+- Waits for the Windows receiver to connect
+
+### Bluetooth End-to-End
+
+1. Pair the Android phone with the Windows PC.
+2. Open the Android app, select `Bluetooth (PC)`, then start the microphone service.
+3. On Windows, run:
+   ```powershell
+   python receiver.py --mac AA:BB:CC:DD:EE:FF
+   ```
+4. If the Android app is running in stereo mode, add:
+   ```powershell
+   python receiver.py --mac AA:BB:CC:DD:EE:FF --input-channels 2
+   ```
+5. If you already know the RFCOMM channel, you can skip channel scanning:
+   ```powershell
+   python receiver.py --mac AA:BB:CC:DD:EE:FF --channel 3
+   ```
 
 ## Architecture
 
 ```
-Android Mic → Network (TCP) → Python Receiver → StMicDriver → Windows Applications
+Android Mic → Bluetooth RFCOMM → Python Receiver → StMicDriver → Windows Applications
 ```
 
 ### Components
@@ -83,8 +101,8 @@ Android Mic → Network (TCP) → Python Receiver → StMicDriver → Windows Ap
 - **StMicDriver**: Windows WDM audio driver (kernel mode)
 - **SidebandData**: Circular buffer for audio data
 - **KSPROPERTY_STMIC_PUSHAUDIO**: Custom IOCTL for audio injection
-- **receiver.py**: User-mode receiver (network → driver)
-- **Android App**: Audio capture and network streaming
+- **receiver.py**: User-mode receiver (Bluetooth → driver)
+- **Android App**: Audio capture and Bluetooth streaming
 
 ## Development
 

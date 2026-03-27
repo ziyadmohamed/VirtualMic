@@ -17,6 +17,7 @@ class BluetoothServer(private val onConnected: (BluetoothSocket) -> Unit) {
 
     private var acceptJob: Job? = null
     private var serverSocket: BluetoothServerSocket? = null
+    private var clientSocket: BluetoothSocket? = null
     private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // Standard SPP UUID
     private val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     
@@ -38,24 +39,30 @@ class BluetoothServer(private val onConnected: (BluetoothSocket) -> Unit) {
             
             acceptJob = CoroutineScope(Dispatchers.IO).launch {
                 Log.d("BluetoothServer", "Waiting for connection...")
-                var socket: BluetoothSocket? = null
                 while (isActive && isRunning) {
-                    try {
-                        socket = serverSocket?.accept()
+                    val socket = try {
+                        serverSocket?.accept()
                     } catch (e: IOException) {
-                        Log.e("BluetoothServer", "Socket accept failed", e)
+                        if (isRunning) {
+                            Log.e("BluetoothServer", "Socket accept failed", e)
+                        }
                         break
                     }
 
-                    if (socket != null) {
+                    if (socket == null) {
+                        continue
+                    }
+
+                    try {
+                        clientSocket = socket
                         Log.d("BluetoothServer", "Accepted connection from ${socket.remoteDevice.name}")
-                        // Manage the connection in a separate thread/helper
-                        // For now, we just pass it back to the service
                         onConnected(socket)
-                        
-                        // We only want one connection for now, so close the server socket
-                        closeServerSocket() 
-                        break
+                    } catch (e: Exception) {
+                        Log.e("BluetoothServer", "Connection handoff failed", e)
+                        try {
+                            socket.close()
+                        } catch (_: IOException) {
+                        }
                     }
                 }
             }
@@ -67,6 +74,7 @@ class BluetoothServer(private val onConnected: (BluetoothSocket) -> Unit) {
 
     fun stop() {
         isRunning = false
+        closeClientSocket()
         closeServerSocket()
         acceptJob?.cancel()
     }
@@ -78,5 +86,14 @@ class BluetoothServer(private val onConnected: (BluetoothSocket) -> Unit) {
             Log.e("BluetoothServer", "Could not close server socket", e)
         }
         serverSocket = null
+    }
+
+    private fun closeClientSocket() {
+        try {
+            clientSocket?.close()
+        } catch (e: IOException) {
+            Log.e("BluetoothServer", "Could not close client socket", e)
+        }
+        clientSocket = null
     }
 }

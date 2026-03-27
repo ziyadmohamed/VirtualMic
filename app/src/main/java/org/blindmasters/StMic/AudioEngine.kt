@@ -15,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.BufferedOutputStream
 import java.io.OutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -28,11 +29,13 @@ class AudioEngine {
     private var noiseSuppressor: NoiseSuppressor? = null
     private var agc: AutomaticGainControl? = null
     
+    @Volatile
     private var outputStream: OutputStream? = null
 
     private var recordJob: Job? = null
     var isRunning = false
         private set
+    var onStreamError: ((Exception) -> Unit)? = null
 
     // Configuration
     var gainFactor: Float = 1.0f
@@ -41,9 +44,28 @@ class AudioEngine {
     var enableAGC: Boolean = false
     var selectedSource: Int = MediaRecorder.AudioSource.MIC
     var muteLocal: Boolean = false
+    var bluetoothOptimized: Boolean = false
     
     fun setStream(stream: OutputStream?) {
-        this.outputStream = stream
+        this.outputStream = stream?.let { BufferedOutputStream(it, 2048) }
+    }
+
+    fun currentSampleRate(): Int {
+        return if (bluetoothOptimized) {
+            if (useStereo) 16000 else 24000
+        } else {
+            48000
+        }
+    }
+
+    fun currentChannelCount(): Int {
+        return if (bluetoothOptimized) {
+            if (useStereo) 2 else 1
+        } else if (useStereo) {
+            2
+        } else {
+            1
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -51,16 +73,21 @@ class AudioEngine {
         if (isRunning) return
         isRunning = true
 
-        val sampleRate = 48000
-        val channelConfigIn = if (useStereo) AudioFormat.CHANNEL_IN_STEREO else AudioFormat.CHANNEL_IN_MONO
-        val channelConfigOut = if (useStereo) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
+        val sampleRate = currentSampleRate()
+        val useMonoForTransport = bluetoothOptimized && !useStereo
+        val channelConfigIn = if (!useMonoForTransport && useStereo) AudioFormat.CHANNEL_IN_STEREO else AudioFormat.CHANNEL_IN_MONO
+        val channelConfigOut = if (!useMonoForTransport && useStereo) AudioFormat.CHANNEL_OUT_STEREO else AudioFormat.CHANNEL_OUT_MONO
         val audioFormat = AudioFormat.ENCODING_PCM_16BIT
+        val bytesPerFrame = currentChannelCount() * 2
 
         val minBufSize = AudioRecord.getMinBufferSize(sampleRate, channelConfigIn, audioFormat)
-        // Use a slightly larger buffer to be safe, or exact for latency.
-        // For passthrough, smaller is better for latency, but riskier for underruns.
-        val bufferSize = max(minBufSize, 4096) 
-        val trackBufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfigOut, audioFormat)
+        val targetBufferBytes = sampleRate * bytesPerFrame / 100
+        val bufferSize = max(minBufSize, targetBufferBytes)
+        val trackBufferSize = if (!muteLocal) {
+            AudioTrack.getMinBufferSize(sampleRate, channelConfigOut, audioFormat)
+        } else {
+            0
+        }
 
         try {
             audioRecord = AudioRecord(
@@ -87,23 +114,25 @@ class AudioEngine {
                 agc?.enabled = true
             }
 
-            audioTrack = AudioTrack.Builder()
-                .setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build()
-                )
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setEncoding(audioFormat)
-                        .setSampleRate(sampleRate)
-                        .setChannelMask(channelConfigOut)
-                        .build()
-                )
-                .setBufferSizeInBytes(trackBufferSize)
-                .setTransferMode(AudioTrack.MODE_STREAM)
-                .build()
+            if (!muteLocal) {
+                audioTrack = AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_MEDIA)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setEncoding(audioFormat)
+                            .setSampleRate(sampleRate)
+                            .setChannelMask(channelConfigOut)
+                            .build()
+                    )
+                    .setBufferSizeInBytes(trackBufferSize)
+                    .setTransferMode(AudioTrack.MODE_STREAM)
+                    .build()
+            }
 
             audioRecord?.startRecording()
             audioTrack?.play()
@@ -135,9 +164,11 @@ class AudioEngine {
                                 val bytes = ByteArray(readResult * 2)
                                 ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer().put(buffer, 0, readResult)
                                 stream.write(bytes)
+                                stream.flush()
                             } catch (e: Exception) {
                                 Log.e("AudioEngine", "Stream write failed", e)
-                                // Optional: close stream on error?
+                                outputStream = null
+                                onStreamError?.invoke(e)
                             }
                         }
                     }

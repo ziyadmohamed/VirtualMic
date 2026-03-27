@@ -5,23 +5,32 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
+import java.io.IOException
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 class MicService : Service() {
 
     private val binder = LocalBinder()
     val audioEngine = AudioEngine()
+    private var activeSocket: BluetoothSocket? = null
     
     val isBtRunning: Boolean
         get() = bluetoothServer.isRunning
 
     private val bluetoothServer = BluetoothServer { socket ->
+        closeActiveSocket()
+        writeBluetoothHeader(socket)
+        activeSocket = socket
         audioEngine.setStream(socket.outputStream)
     }
     
@@ -35,12 +44,17 @@ class MicService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        audioEngine.onStreamError = { error ->
+            Log.e("MicService", "Bluetooth stream disconnected", error)
+            closeActiveSocket()
+            audioEngine.setStream(null)
+        }
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (intent?.action == ACTION_STOP) {
-            audioEngine.stop()
+            stopStreaming()
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return START_NOT_STICKY
@@ -51,11 +65,18 @@ class MicService : Service() {
         val enableBt = intent?.getBooleanExtra(EXTRA_ENABLE_BT, false) ?: false
         val muteLocal = intent?.getBooleanExtra(EXTRA_MUTE_LOCAL, false) ?: false
         
+        audioEngine.bluetoothOptimized = enableBt
         audioEngine.muteLocal = muteLocal
-        audioEngine.start()
+        if (!audioEngine.isRunning) {
+            audioEngine.start()
+        }
         
         if (enableBt) {
             bluetoothServer.start()
+        } else {
+            bluetoothServer.stop()
+            closeActiveSocket()
+            audioEngine.setStream(null)
         }
         
         return START_STICKY
@@ -97,9 +118,36 @@ class MicService : Service() {
     }
 
     override fun onDestroy() {
+        stopStreaming()
         super.onDestroy()
-        audioEngine.stop()
+    }
+
+    private fun stopStreaming() {
         bluetoothServer.stop()
+        closeActiveSocket()
+        audioEngine.setStream(null)
+        audioEngine.stop()
+    }
+
+    private fun closeActiveSocket() {
+        try {
+            activeSocket?.close()
+        } catch (e: IOException) {
+            e.printStackTrace()
+        }
+        activeSocket = null
+    }
+
+    private fun writeBluetoothHeader(socket: BluetoothSocket) {
+        val header = ByteBuffer.allocate(12)
+            .order(ByteOrder.LITTLE_ENDIAN)
+            .put(byteArrayOf(0x53, 0x54, 0x4D, 0x31))
+            .putInt(audioEngine.currentSampleRate())
+            .putShort(audioEngine.currentChannelCount().toShort())
+            .putShort(1)
+            .array()
+        socket.outputStream.write(header)
+        socket.outputStream.flush()
     }
 
     companion object {
