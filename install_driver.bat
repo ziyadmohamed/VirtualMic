@@ -15,6 +15,7 @@ if errorlevel 1 (
 )
 
 set "ARTIFACTS_ROOT=%~dp0artifacts"
+set "APO_CLSID={A4B73D9A-7D0E-4E7B-9E4D-9D6D3C1A9B2F}"
 
 REM Pick latest artifact folder that contains the driver package.
 for /f "usebackq delims=" %%I in (`powershell -NoProfile -Command "$root = '%ARTIFACTS_ROOT%'; if(!(Test-Path $root)){ exit 1 }; $inf = Get-ChildItem -Path $root -Recurse -Filter SimpleAudioSample.inf -File | Where-Object { $_.FullName -match '\\package\\SimpleAudioSample\.inf$' } | Sort-Object LastWriteTime -Descending | Select-Object -First 1; if(!$inf){ exit 1 }; $pkg = $inf.Directory.FullName; $relative = $inf.FullName.Substring($root.Length).TrimStart('\'); $artifactName = $relative.Split('\')[0]; $base = Join-Path $root $artifactName; $cer = Get-ChildItem -Path $base -Recurse -Filter package.cer -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending | Select-Object -First 1; Write-Output $base; Write-Output $pkg; Write-Output $inf.FullName; if($cer){ Write-Output $cer.FullName }"`) do (
@@ -76,8 +77,31 @@ if exist "%APO%" (
     if not defined NO_PAUSE pause
     exit /b 1
   )
+  echo Registering APO CLSID...
+  reg add "HKCR\CLSID\%APO_CLSID%" /ve /t REG_SZ /d "VirtualMic APO" /f >nul
+  if errorlevel 1 (
+    if not defined NO_PAUSE pause
+    exit /b 1
+  )
+  reg add "HKCR\CLSID\%APO_CLSID%\InprocServer32" /ve /t REG_SZ /d "%SystemRoot%\System32\VirtualMicApo.dll" /f >nul
+  if errorlevel 1 (
+    if not defined NO_PAUSE pause
+    exit /b 1
+  )
+  reg add "HKCR\CLSID\%APO_CLSID%\InprocServer32" /v ThreadingModel /t REG_SZ /d "Both" /f >nul
+  if errorlevel 1 (
+    if not defined NO_PAUSE pause
+    exit /b 1
+  )
 ) else (
   echo APO DLL not found in package, skipping APO copy.
+)
+
+echo Restarting audio services...
+powershell -NoProfile -Command "Restart-Service -Name audiosrv,AudioEndpointBuilder -Force"
+if errorlevel 1 (
+  if not defined NO_PAUSE pause
+  exit /b 1
 )
 
 echo Done.
