@@ -1981,30 +1981,29 @@ class Plugin:
             preset_lower = self.preset.lower() if hasattr(self, "preset") and self.preset else ""
             self.sim_timer += dt
             
+            road = self.road / 100.0
             if "idle" in preset_lower or "jam" in preset_lower:
                 if preset_lower == "taxi idle":
                     self.sim_target_speed = 0.0
                 else:
-                    if int(self.sim_timer / 10) % 2 == 0:
-                        self.sim_target_speed = 12.0
-                    else:
-                        self.sim_target_speed = 2.0
+                    base_speed = 12.0 if int(self.sim_timer / 10) % 2 == 0 else 2.0
+                    self.sim_target_speed = base_speed * (0.3 + 1.2 * road)
             elif "highway" in preset_lower or "tunnel" in preset_lower or "cruise" in preset_lower:
-                self.sim_target_speed = 100.0 + 3.0 * math.sin(self.sim_timer * 0.1)
+                self.sim_target_speed = (130.0 * road) + 30.0 + 4.0 * math.sin(self.sim_timer * 0.1)
             else:
                 cycle_time = self.sim_timer % 70.0
                 if cycle_time < 20.0:
-                    self.sim_target_speed = 55.0
+                    base_speed = 55.0
                 elif cycle_time < 45.0:
-                    self.sim_target_speed = 55.0 + 2.0 * math.sin(self.sim_timer * 0.5)
-                elif cycle_time < 58.0:
-                    self.sim_target_speed = 0.0
+                    base_speed = 55.0 + 2.0 * math.sin(self.sim_timer * 0.5)
                 else:
-                    self.sim_target_speed = 0.0
+                    base_speed = 0.0
+                self.sim_target_speed = base_speed * (0.3 + 1.4 * road)
 
             speed_diff = self.sim_target_speed - self.sim_speed
             if abs(speed_diff) > 0.1:
-                accel_rate = 6.0 if speed_diff > 0 else 12.0
+                # Accelerate and decelerate faster for a more aggressive, realistic feel
+                accel_rate = 12.0 if speed_diff > 0 else 18.0
                 self.sim_speed += np.sign(speed_diff) * min(accel_rate * dt, abs(speed_diff))
             else:
                 self.sim_speed = self.sim_target_speed
@@ -2108,6 +2107,24 @@ class Plugin:
                 wet[:, 1] *= math.exp(total_balance)
 
             output = (dry_stereo * (1.0 - mix)) + (wet * mix) + music_bed
+
+            # Look-ahead Peak Limiter with smooth envelope decay to fully resolve clipping
+            if not hasattr(self, "limiter_envelope"):
+                self.limiter_envelope = 0.0
+            if not hasattr(self, "current_limiter_gain"):
+                self.current_limiter_gain = 1.0
+
+            block_peak = float(np.max(np.abs(output)))
+            if block_peak > self.limiter_envelope:
+                self.limiter_envelope = block_peak
+            else:
+                self.limiter_envelope = 0.93 * self.limiter_envelope + 0.07 * block_peak
+
+            target_gain = 0.94 / self.limiter_envelope if self.limiter_envelope > 0.94 else 1.0
+            gains = np.linspace(self.current_limiter_gain, target_gain, length)[:, None]
+            output *= gains
+            self.current_limiter_gain = target_gain
+
             return np.clip(output, -0.98, 0.98).astype(np.float32, copy=False)
 
     def open_settings(self, parent):

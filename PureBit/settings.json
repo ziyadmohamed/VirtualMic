@@ -14,7 +14,7 @@
         "voice_changer.py": false,
         "vst_host.py": false,
         "walkie_talkie.py": false,
-        "car_cabin.py": false,
+        "car_cabin.py": true,
         "ambient_spaces.py": false
     }
 }
