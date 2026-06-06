@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PureBit Addons Guide</title>
+  <style>
+    body { font-family: "Segoe UI", sans-serif; margin: 32px; background: #f6f8fb; color: #1f2937; }
+    main { max-width: 820px; background: white; padding: 28px; border-radius: 16px; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08); }
+    h1, h2 { margin-top: 0; }
+    p, li { line-height: 1.65; }
+    code { background: #e5e7eb; padding: 2px 6px; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>PureBit Addons Guide</h1>
+    <p>PureBit discovers plugins from the local <code>plugins</code> directory. Each plugin is a Python module that exposes a <code>Plugin</code> class with a <code>process()</code> method.</p>
+    <h2>Basic Rules</h2>
+    <ul>
+      <li>Keep plugins frame-count stable. Return the same number of samples you receive.</li>
+      <li>Use mono processing unless the plugin explicitly supports stereo.</li>
+      <li>Persist plugin state through the shared settings file when needed.</li>
+    </ul>
+    <h2>Deployment</h2>
+    <ul>
+      <li>Portable builds can accept new plugin files directly under the local <code>plugins</code> folder.</li>
+      <li>Install builds preserve user plugin files during upgrades whenever possible.</li>
+      <li>Large asset-based plugins may be excluded from compact runtime packages to keep installer size under control.</li>
+    </ul>
+  </main>
+</body>
+</html>

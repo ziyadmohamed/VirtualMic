@@ -1,0 +1,23 @@
+{
+  "preset": "Driver Seat",
+  "space": 38,
+  "speaker": 50,
+  "road": 18,
+  "tight": 68,
+  "mix": 86,
+  "width": 28,
+  "presence": 60,
+  "seat": 20,
+  "window": 6,
+  "hrtf": 62,
+  "balance": 50,
+  "engine": 24,
+  "rain": 0,
+  "air": 18,
+  "traffic": 10,
+  "motion": 16,
+  "song_path": "",
+  "song_enabled": false,
+  "song_loop": true,
+  "song_level": 36
+}

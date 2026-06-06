@@ -1,0 +1,15 @@
+PureBit Source Package
+
+1. Install Python 3.11 or newer.
+2. Open a terminal in this folder.
+3. Install Python packages:
+   pip install -r requirements.txt
+4. If you want Steam Audio-based plugins such as Ambient Spaces or Car Cabin, run:
+   install_steam_audio.bat
+5. Start the app:
+   python PureBit.py
+
+Notes:
+- Steam Audio is installed locally into this package under third_party\steamaudio.
+- PureBit will auto-detect that local Steam Audio install.
+- MP3 loading in some plugins may still depend on the codecs available on the machine.

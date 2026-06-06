@@ -90,6 +90,10 @@ See `app/` directory for Android application that:
    python receiver.py --mac AA:BB:CC:DD:EE:FF --channel 3
    ```
 
+### Native Windows Control Path
+
+See `WINDOWS_PHONE_BRIDGE.md` for the native Windows-side control path that is intended to grow toward a Phone Link-style system integration. The initial tool enumerates Windows communications audio endpoints and reports the current default render/capture devices.
+
 ## Architecture
 
 ```

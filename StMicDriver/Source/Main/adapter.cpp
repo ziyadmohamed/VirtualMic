@@ -740,10 +740,10 @@ Return Value:
     IF_FAILED_JUMP(ntStatus, Exit);
 
     //
-    // Install wave+topology filters for render devices - DISABLED for Microphone Only
+    // Install wave+topology filters for render devices
     //
-    // ntStatus = InstallAllRenderFilters(DeviceObject, Irp, pAdapterCommon);
-    // IF_FAILED_JUMP(ntStatus, Exit);
+    ntStatus = InstallAllRenderFilters(DeviceObject, Irp, pAdapterCommon);
+    IF_FAILED_JUMP(ntStatus, Exit);
 
     //
     // Install wave+topology filters for capture devices

@@ -13,12 +13,16 @@ import kotlinx.coroutines.launch
 import java.io.IOException
 import java.util.UUID
 
-class BluetoothServer(private val onConnected: (BluetoothSocket) -> Unit) {
+class BluetoothServer(
+    private val serviceName: String = DEFAULT_SERVICE_NAME,
+    uuidString: String = DEFAULT_UUID_STRING,
+    private val onConnected: (BluetoothSocket) -> Unit,
+) {
 
     private var acceptJob: Job? = null
     private var serverSocket: BluetoothServerSocket? = null
     private var clientSocket: BluetoothSocket? = null
-    private val uuid: UUID = UUID.fromString("00001101-0000-1000-8000-00805F9B34FB") // Standard SPP UUID
+    private val uuid: UUID = UUID.fromString(uuidString)
     private val adapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     
     var isRunning = false
@@ -33,8 +37,7 @@ class BluetoothServer(private val onConnected: (BluetoothSocket) -> Unit) {
         }
 
         try {
-            // "StMic" is the Service Name, UUID is the Service ID
-            serverSocket = adapter.listenUsingRfcommWithServiceRecord("StMic", uuid)
+            serverSocket = adapter.listenUsingRfcommWithServiceRecord(serviceName, uuid)
             isRunning = true
             
             acceptJob = CoroutineScope(Dispatchers.IO).launch {
@@ -95,5 +98,10 @@ class BluetoothServer(private val onConnected: (BluetoothSocket) -> Unit) {
             Log.e("BluetoothServer", "Could not close client socket", e)
         }
         clientSocket = null
+    }
+
+    companion object {
+        const val DEFAULT_SERVICE_NAME = "StMic"
+        const val DEFAULT_UUID_STRING = "00001101-0000-1000-8000-00805F9B34FB"
     }
 }

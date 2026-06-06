@@ -1,0 +1,20 @@
+{
+    "plugin_states": {
+        "bitgrid_crusher.py": false,
+        "holo_chorus.py": false,
+        "megaphone.py": false,
+        "neon_commander.py": false,
+        "pulse_gate.py": false,
+        "pyworld_studio.py": false,
+        "radio_broadcast.py": false,
+        "robot_matrix.py": false,
+        "shadow_echo.py": false,
+        "stadium_pa.py": false,
+        "tunnel_space.py": false,
+        "voice_changer.py": false,
+        "vst_host.py": false,
+        "walkie_talkie.py": false,
+        "car_cabin.py": false,
+        "ambient_spaces.py": false
+    }
+}

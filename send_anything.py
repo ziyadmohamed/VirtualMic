@@ -89,7 +89,7 @@ class KSPROPERTY(ctypes.Structure):
         ("Flags", wintypes.DWORD),
     ]
 
-KSPROPERTY_TYPE_SET = 0x00000001
+KSPROPERTY_TYPE_SET = 0x00000002
 KSPROPERTY_STMIC_PUSHAUDIO = 1
 
 # IOCTL_KS_PROPERTY (METHOD_NEITHER)
@@ -442,8 +442,8 @@ def send_via_ksproperty(device_path, audio_data):
 
 def main():
     wav_path = None
-    freq = 440.0
-    seconds = 2.0
+    freq = 1500.0
+    seconds = 8.0
     sample_rate = 48000
     selected_index = None
     non_interactive = False

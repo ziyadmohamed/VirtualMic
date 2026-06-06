@@ -1,0 +1,35 @@
+name: Build Windows Phone Bridge
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'WindowsPhoneBridge/**'
+      - '.github/workflows/build-windows-bridge.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build phone bridge control tool
+        shell: powershell
+        run: |
+          msbuild WindowsPhoneBridge\PhoneBridgeCtl.vcxproj /p:Configuration=Release /p:Platform=x64 /m /v:minimal
+
+      - name: Upload bridge artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: WindowsPhoneBridge
+          path: |
+            WindowsPhoneBridge\build\PhoneBridgeCtl\Release\phone_bridge_ctl.exe
+            WINDOWS_PHONE_BRIDGE.md
+          if-no-files-found: error
+

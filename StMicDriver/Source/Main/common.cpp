@@ -21,8 +21,9 @@ Abstract:
 #include "endpoints.h"
 #include "SidebandData.h"
 
-// Global SidebandData instance
+// Global SidebandData instances
 SidebandData g_SidebandData;
+SidebandData g_LoopbackData;
 
 //-----------------------------------------------------------------------------
 // CSaveData statics
@@ -1590,7 +1591,8 @@ Return Value:
     adapterCommon = PADAPTERCOMMON(this);
 
     // Keep the newest audio instead of queueing seconds of stale mic data.
-    g_SidebandData.Init(64 * 1024);
+    g_SidebandData.Init(1024 * 1024);
+    g_LoopbackData.Init(1024 * 1024);
 
     ntStatus = CreateAudioInterfaceWithProperties(Name, TemplateName, cPropertyCount, pProperties, &symbolicLink);
     if (NT_SUCCESS(ntStatus))
@@ -2125,6 +2127,7 @@ CAdapterCommon::Cleanup()
     DPF_ENTER(("[CAdapterCommon::Cleanup]"));
     EmptySubdeviceCache();
     g_SidebandData.Free();
+    g_LoopbackData.Free();
 }
 
 //=============================================================================

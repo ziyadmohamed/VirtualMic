@@ -1,0 +1,9 @@
+{
+  "preset": "Broadcast",
+  "drive": 28,
+  "presence": 34,
+  "thickness": 18,
+  "mix": 82,
+  "delay_samples": 156,
+  "output_gain": 0.95
+}

@@ -20,10 +20,12 @@ Abstract:-
 //
 // Mic array range.
 //
-#define MICARRAY_RAW_CHANNELS                   2       // Channels for raw mode
-#define MICARRAY_DEVICE_MAX_CHANNELS            2       // Max channels overall
-#define MICARRAY_32_BITS_PER_SAMPLE_PCM         32      // 32 Bits Per Sample
-#define MICARRAY_RAW_SAMPLE_RATE                48000   // Raw sample rate
+#define MICARRAY_RAW_CHANNELS                   32      // Max Channels for raw mode
+#define MICARRAY_DEVICE_MAX_CHANNELS            32      // Max channels overall
+#define MICARRAY_MIN_BITS_PER_SAMPLE            16      // Min Bits Per Sample
+#define MICARRAY_MAX_BITS_PER_SAMPLE            32      // Max Bits Per Sample
+#define MICARRAY_MIN_SAMPLE_RATE                8000    // Min Sample Rate
+#define MICARRAY_MAX_SAMPLE_RATE                384000  // Max Sample Rate
 
 //
 // Max # of pin instances.
@@ -34,7 +36,7 @@ Abstract:-
 static
 KSDATAFORMAT_WAVEFORMATEXTENSIBLE MicArrayPinSupportedDeviceFormats[] =
 {
-    // 48 KHz 32-bit 2 channels
+    // 48 KHz 32-bit 2 channels (Standard Default format)
     {
         {
             sizeof(KSDATAFORMAT_WAVEFORMATEXTENSIBLE),
@@ -105,7 +107,7 @@ PIN_DEVICE_FORMATS_AND_MODES MicArrayPinDeviceFormatsAndModes[] =
 static
 KSDATARANGE_AUDIO MicArrayPinDataRangesRawStream[] =
 {
-    {
+    { // 0 - PCM Range
         {
             sizeof(KSDATARANGE_AUDIO),
             KSDATARANGE_ATTRIBUTES,         // An attributes list follows this data range
@@ -115,12 +117,28 @@ KSDATARANGE_AUDIO MicArrayPinDataRangesRawStream[] =
             STATICGUIDOF(KSDATAFORMAT_SUBTYPE_PCM),
             STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
         },
-        MICARRAY_RAW_CHANNELS,
-        MICARRAY_32_BITS_PER_SAMPLE_PCM,
-        MICARRAY_32_BITS_PER_SAMPLE_PCM,
-        MICARRAY_RAW_SAMPLE_RATE,
-        MICARRAY_RAW_SAMPLE_RATE
+        MICARRAY_DEVICE_MAX_CHANNELS,
+        MICARRAY_MIN_BITS_PER_SAMPLE,
+        MICARRAY_MAX_BITS_PER_SAMPLE,
+        MICARRAY_MIN_SAMPLE_RATE,
+        MICARRAY_MAX_SAMPLE_RATE
     },
+    { // 1 - IEEE Float Range
+        {
+            sizeof(KSDATARANGE_AUDIO),
+            KSDATARANGE_ATTRIBUTES,         // An attributes list follows this data range
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        MICARRAY_DEVICE_MAX_CHANNELS,
+        32, // MinimumBitsPerSample (floats are 32-bit)
+        32, // MaximumBitsPerSample
+        MICARRAY_MIN_SAMPLE_RATE,
+        MICARRAY_MAX_SAMPLE_RATE
+    }
 };
 
 static
@@ -128,6 +146,7 @@ PKSDATARANGE MicArrayPinDataRangePointersStream[] =
 {
     // All supported device formats should be listed in the DataRange.
     PKSDATARANGE(&MicArrayPinDataRangesRawStream[0]),
+    PKSDATARANGE(&MicArrayPinDataRangesRawStream[1]),
     PKSDATARANGE(&PinDataRangeAttributeList),
 };
 

@@ -16,13 +16,13 @@ Abstract:
 
 // To keep the code simple assume device supports only 48KHz, 16-bit, stereo (PCM and NON-PCM)
 
-#define SPEAKER_DEVICE_MAX_CHANNELS                 2       // Max Channels.
+#define SPEAKER_DEVICE_MAX_CHANNELS                 32      // Max Channels.
 
-#define SPEAKER_HOST_MAX_CHANNELS                   2       // Max Channels.
+#define SPEAKER_HOST_MAX_CHANNELS                   32      // Max Channels.
 #define SPEAKER_HOST_MIN_BITS_PER_SAMPLE            16      // Min Bits Per Sample
-#define SPEAKER_HOST_MAX_BITS_PER_SAMPLE            16      // Max Bits Per Sample
-#define SPEAKER_HOST_MIN_SAMPLE_RATE                48000   // Min Sample Rate
-#define SPEAKER_HOST_MAX_SAMPLE_RATE                48000   // Max Sample Rate
+#define SPEAKER_HOST_MAX_BITS_PER_SAMPLE            32      // Max Bits Per Sample
+#define SPEAKER_HOST_MIN_SAMPLE_RATE                8000    // Min Sample Rate
+#define SPEAKER_HOST_MAX_SAMPLE_RATE                384000  // Max Sample Rate
 
 //
 // Max # of pin instances.
@@ -100,7 +100,7 @@ PIN_DEVICE_FORMATS_AND_MODES SpeakerPinDeviceFormatsAndModes[] =
 static
 KSDATARANGE_AUDIO SpeakerPinDataRangesStream[] =
 {
-    { // 0
+    { // 0 - PCM Range
         {
             sizeof(KSDATARANGE_AUDIO),
             KSDATARANGE_ATTRIBUTES,         // An attributes list follows this data range
@@ -115,6 +115,22 @@ KSDATARANGE_AUDIO SpeakerPinDataRangesStream[] =
         SPEAKER_HOST_MAX_BITS_PER_SAMPLE,    
         SPEAKER_HOST_MIN_SAMPLE_RATE,            
         SPEAKER_HOST_MAX_SAMPLE_RATE             
+    },
+    { // 1 - IEEE Float Range
+        {
+            sizeof(KSDATARANGE_AUDIO),
+            KSDATARANGE_ATTRIBUTES,         // An attributes list follows this data range
+            0,
+            0,
+            STATICGUIDOF(KSDATAFORMAT_TYPE_AUDIO),
+            STATICGUIDOF(KSDATAFORMAT_SUBTYPE_IEEE_FLOAT),
+            STATICGUIDOF(KSDATAFORMAT_SPECIFIER_WAVEFORMATEX)
+        },
+        SPEAKER_HOST_MAX_CHANNELS,           
+        32, // MinimumBitsPerSample (floats are 32-bit)
+        32, // MaximumBitsPerSample
+        SPEAKER_HOST_MIN_SAMPLE_RATE,            
+        SPEAKER_HOST_MAX_SAMPLE_RATE             
     }
 };
 
@@ -122,6 +138,7 @@ static
 PKSDATARANGE SpeakerPinDataRangePointersStream[] =
 {
     PKSDATARANGE(&SpeakerPinDataRangesStream[0]),
+    PKSDATARANGE(&SpeakerPinDataRangesStream[1]),
     PKSDATARANGE(&PinDataRangeAttributeList),
 };
 

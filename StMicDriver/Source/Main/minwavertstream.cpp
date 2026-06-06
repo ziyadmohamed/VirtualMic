@@ -1409,14 +1409,60 @@ ByteDisplacement - # of bytes to process.
 {
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
-    // Normally this will loop no more than once for a single wrap, but if
-    // many bytes have been displaced then this may loops many times.
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
         
-        // Read from our sideband buffer (injected audio)
-        g_SidebandData.Read(m_pDmaBuffer + bufferOffset, runWrite);
+        // Allocate temporary mixing buffers on the DPC stack
+        BYTE micBuf[2048];
+        BYTE loopbackBuf[2048];
+        ULONG copyLen = min(runWrite, sizeof(micBuf));
+        
+        g_SidebandData.Read(micBuf, copyLen);
+        g_LoopbackData.Read(loopbackBuf, copyLen);
+        
+        // Mix micBuf and loopbackBuf sample-by-sample and copy to the DMA buffer
+        if (m_pWfExt && m_pWfExt->SubFormat == KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)
+        {
+            float* dest = (float*)(m_pDmaBuffer + bufferOffset);
+            float* src1 = (float*)micBuf;
+            float* src2 = (float*)loopbackBuf;
+            ULONG sampleCount = copyLen / sizeof(float);
+            for (ULONG s = 0; s < sampleCount; ++s)
+            {
+                dest[s] = src1[s] + src2[s];
+                if (dest[s] > 1.0f) dest[s] = 1.0f;
+                else if (dest[s] < -1.0f) dest[s] = -1.0f;
+            }
+        }
+        else if (m_pWfExt && m_pWfExt->Format.wBitsPerSample == 16)
+        {
+            SHORT* dest = (SHORT*)(m_pDmaBuffer + bufferOffset);
+            SHORT* src1 = (SHORT*)micBuf;
+            SHORT* src2 = (SHORT*)loopbackBuf;
+            ULONG sampleCount = copyLen / sizeof(SHORT);
+            for (ULONG s = 0; s < sampleCount; ++s)
+            {
+                LONG sum = (LONG)src1[s] + (LONG)src2[s];
+                if (sum > 32767) sum = 32767;
+                else if (sum < -32768) sum = -32768;
+                dest[s] = (SHORT)sum;
+            }
+        }
+        else // default to 32-bit PCM
+        {
+            LONG* dest = (LONG*)(m_pDmaBuffer + bufferOffset);
+            LONG* src1 = (LONG*)micBuf;
+            LONG* src2 = (LONG*)loopbackBuf;
+            ULONG sampleCount = copyLen / sizeof(LONG);
+            for (ULONG s = 0; s < sampleCount; ++s)
+            {
+                INT64 sum = (INT64)src1[s] + (INT64)src2[s];
+                if (sum > 2147483647) sum = 2147483647;
+                else if (sum < -2147483648LL) sum = -2147483648LL;
+                dest[s] = (LONG)sum;
+            }
+        }
            	
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;
@@ -1443,11 +1489,13 @@ ByteDisplacement - # of bytes to process.
 {
     ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
 
-    // Normally this will loop no more than once for a single wrap, but if
-    // many bytes have been displaced then this may loops many times.
     while (ByteDisplacement > 0)
     {
         ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
+        
+        // Kernel Loopback: Write the rendered audio to the global loopback buffer!
+        g_LoopbackData.Write(m_pDmaBuffer + bufferOffset, runWrite);
+        
         m_SaveData.WriteData(m_pDmaBuffer + bufferOffset, runWrite);
         bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
         ByteDisplacement -= runWrite;

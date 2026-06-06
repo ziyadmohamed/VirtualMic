@@ -390,7 +390,7 @@ Return Value:
         }
 
         // Init Sideband Data for Mic
-        g_SidebandData.Init(48000 * 4); // 48kHz * 4 bytes/sample * 1 sec (approx)
+        g_SidebandData.Init(1024 * 1024);
             
         // System streams.
         size = sizeof(PCMiniportWaveRTStream) * m_ulMaxSystemStreams;
@@ -408,6 +408,10 @@ Return Value:
             m_pDrmPort = NULL;
         }
     }
+    
+    // Init both sideband and loopback buffers
+    g_SidebandData.Init(1024 * 1024);
+    g_LoopbackData.Init(1024 * 1024);
     
     // 
     // For KS event support.

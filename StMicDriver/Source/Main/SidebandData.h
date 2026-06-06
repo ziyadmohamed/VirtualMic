@@ -122,5 +122,6 @@ public:
 
 // Global instance declaration
 extern SidebandData g_SidebandData;
+extern SidebandData g_LoopbackData;
 
 #endif
